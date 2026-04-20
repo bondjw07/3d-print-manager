@@ -110,6 +110,7 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  passwordHash String?
   role      UserRole
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -311,6 +312,19 @@ model MarketplaceEvent {
 model AppSetting {
   id                 String          @id @default("app")
   defaultMarketplace MarketplaceType @default(ETSY)
+  myMiniFactoryClientIdHash          String?
+  myMiniFactoryClientIdEncrypted     String?
+  myMiniFactoryClientSecretHash      String?
+  myMiniFactoryClientSecretEncrypted String?
+  myMiniFactoryAccessTokenEncrypted  String?
+  myMiniFactoryRefreshTokenEncrypted String?
+  myMiniFactoryTokenType             String?
+  myMiniFactoryTokenScope            String?
+  myMiniFactoryTokenExpiresAt        DateTime?
+  myMiniFactoryConnectedAt           DateTime?
+  myMiniFactoryOauthStateHash        String?
+  myMiniFactoryOauthStateExpiresAt   DateTime?
+  myMiniFactoryOauthRedirectUri      String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 }

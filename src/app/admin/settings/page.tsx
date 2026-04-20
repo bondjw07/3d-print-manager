@@ -1,9 +1,15 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
-import { updateSettingsAction } from "@/server/actions/portal-actions";
+import {
+  disconnectMyMiniFactoryOAuthAction,
+  updateMyMiniFactoryCredentialsAction,
+  updateSettingsAction,
+} from "@/server/actions/portal-actions";
+import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
 import { getSettings } from "@/server/services/settings-service";
 
 export default async function AdminSettingsPage({
@@ -11,7 +17,11 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, settings] = await Promise.all([searchParams, getSettings()]);
+  const [params, settings, myMiniFactoryStatus] = await Promise.all([
+    searchParams,
+    getSettings(),
+    getMyMiniFactoryIntegrationStatus(),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -57,10 +67,103 @@ export default async function AdminSettingsPage({
           <CardTitle>Integration Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-slate-600">
-          <p>Auth provider: mocked role-based session (ready for provider swap).</p>
+          <p>Auth provider: local credential session with role-based access controls (ready for provider swap).</p>
           <p>Marketplace provider: mocked adapter behind interface with publish/update/remove/refresh actions.</p>
           <p>AI provider: mocked listing content interface stub available for future model integration.</p>
           <p>Storage provider: local filesystem adapter for product images, abstracted for future object storage.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>MyMiniFactory OAuth</CardTitle>
+          <CardDescription>
+            Configure OAuth credentials for creator bulk import. Credentials are hashed and encrypted at rest.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            <p>
+              Credentials configured:{" "}
+              <span className="font-semibold text-slate-900">{myMiniFactoryStatus.hasCredentials ? "Yes" : "No"}</span>
+            </p>
+            <p>
+              OAuth connected:{" "}
+              <span className="font-semibold text-slate-900">{myMiniFactoryStatus.hasAccessToken ? "Yes" : "No"}</span>
+            </p>
+            <p>
+              Token status:{" "}
+              <span className="font-semibold text-slate-900">
+                {myMiniFactoryStatus.hasAccessToken
+                  ? myMiniFactoryStatus.isAccessTokenExpired
+                    ? "Expired"
+                    : "Active"
+                  : "Not connected"}
+              </span>
+            </p>
+            {myMiniFactoryStatus.tokenExpiresAt ? (
+              <p>
+                Token expiry:{" "}
+                <span className="font-semibold text-slate-900">
+                  {myMiniFactoryStatus.tokenExpiresAt.toLocaleString()}
+                </span>
+              </p>
+            ) : null}
+            {myMiniFactoryStatus.connectedAt ? (
+              <p>
+                Last connected:{" "}
+                <span className="font-semibold text-slate-900">{myMiniFactoryStatus.connectedAt.toLocaleString()}</span>
+              </p>
+            ) : null}
+          </div>
+
+          <form action={updateMyMiniFactoryCredentialsAction} className="grid max-w-xl gap-3">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Client ID
+              <Input
+                name="myMiniFactoryClientId"
+                type="text"
+                autoComplete="off"
+                placeholder="MMF OAuth client_id"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Client Secret
+              <Input
+                name="myMiniFactoryClientSecret"
+                type="password"
+                autoComplete="new-password"
+                placeholder="MMF OAuth client_secret"
+                required
+              />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" className="w-fit">
+                Save Credentials
+              </Button>
+            </div>
+          </form>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <form action="/api/admin/myminifactory/oauth/connect" method="get">
+              <Button type="submit" disabled={!myMiniFactoryStatus.hasCredentials}>
+                Connect OAuth
+              </Button>
+            </form>
+
+            <form action={disconnectMyMiniFactoryOAuthAction}>
+              <input type="hidden" name="redirectTo" value="/admin/settings" />
+              <Button type="submit" variant="secondary" disabled={!myMiniFactoryStatus.hasAccessToken}>
+                Disconnect OAuth
+              </Button>
+            </form>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            OAuth callback path: <code>/api/admin/myminifactory/oauth/callback</code>
+          </p>
         </CardContent>
       </Card>
     </div>

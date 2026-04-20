@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSessionUser, setSessionUser } from "./mock-auth-provider";
+import { hashPassword, verifyPassword } from "./password";
 
 function encodeError(message: string) {
   return encodeURIComponent(message);
@@ -13,16 +14,28 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export async function loginAsUserAction(formData: FormData) {
-  const userId = String(formData.get("userId") ?? "");
+export async function loginWithPasswordAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("password") ?? "");
 
-  if (!userId) {
-    redirect("/login?error=Select%20a%20user");
+  if (!email || !password) {
+    redirect("/login?error=Email%20and%20password%20are%20required");
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !user.isActive) {
-    redirect("/login?error=Selected%20user%20is%20not%20available");
+  if (!isValidEmail(email)) {
+    redirect(`/login?error=${encodeError("Enter a valid email address.")}`);
+  }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.isActive || !user.passwordHash) {
+    redirect("/login?error=Invalid%20email%20or%20password");
+  }
+
+  const passwordIsValid = await verifyPassword(password, user.passwordHash);
+  if (!passwordIsValid) {
+    redirect("/login?error=Invalid%20email%20or%20password");
   }
 
   await setSessionUser(user.id);
@@ -52,15 +65,25 @@ export async function createInitialAdminAction(formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const allowWhenAdminExists = String(formData.get("allowWhenAdminExists") ?? "") === "1";
   const bootstrapTestModeEnabled = process.env.ENABLE_INITIAL_ADMIN_TEST_MODE === "true";
 
-  if (!name || !email) {
-    redirect(`/login?error=${encodeError("Name and email are required.")}`);
+  if (!name || !email || !password || !confirmPassword) {
+    redirect(`/login?error=${encodeError("Name, email, and password are required.")}`);
   }
 
   if (!isValidEmail(email)) {
     redirect(`/login?error=${encodeError("Enter a valid email address.")}`);
+  }
+
+  if (password.length < 8) {
+    redirect(`/login?error=${encodeError("Password must be at least 8 characters.")}`);
+  }
+
+  if (password !== confirmPassword) {
+    redirect(`/login?error=${encodeError("Passwords do not match.")}`);
   }
 
   const existingAdmin = await prisma.user.findFirst({
@@ -85,6 +108,7 @@ export async function createInitialAdminAction(formData: FormData) {
     data: {
       name,
       email,
+      passwordHash: await hashPassword(password),
       role: "ADMIN",
       isActive: true,
     },

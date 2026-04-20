@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-export type ProductImportMode = "single" | "bulk" | "creator";
+export type ProductImportMode = "single" | "bulk" | "creator" | "creatorMmf";
 
 type ImportLogStatus = "imported" | "duplicate" | "failed" | "invalid" | "discovered";
 
@@ -57,6 +57,7 @@ function statusBadgeClasses(status: ImportLogStatus) {
 function importModeLabel(mode: ProductImportMode) {
   if (mode === "single") return "single URL";
   if (mode === "creator") return "Thangs creator";
+  if (mode === "creatorMmf") return "MyMiniFactory creator";
   return "bulk URL";
 }
 
@@ -76,6 +77,9 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
   const [importedCount, setImportedCount] = useState(0);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  const isCreatorMode = mode === "creator" || mode === "creatorMmf";
+  const isThangsCreatorMode = mode === "creator";
+  const isMyMiniFactoryCreatorMode = mode === "creatorMmf";
 
   useEffect(() => {
     setIsModalOpen(false);
@@ -94,7 +98,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     !isRunning &&
     (mode === "single"
       ? singleSourceUrl.trim().length > 0
-      : mode === "creator"
+      : isCreatorMode
         ? creatorUrl.trim().length > 0
         : sourceUrls.trim().length > 0);
   const finished = !isRunning && totalCount > 0 && processedCount === totalCount;
@@ -104,8 +108,11 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
       if (mode === "single") {
         return "Enter a product URL to start importing.";
       }
-      if (mode === "creator") {
+      if (isThangsCreatorMode) {
         return "Enter a Thangs creator URL to discover and import products.";
+      }
+      if (isMyMiniFactoryCreatorMode) {
+        return "Enter a MyMiniFactory creator username or profile URL to discover public objects and import products.";
       }
       return "Paste URLs to start a bulk import.";
     }
@@ -115,7 +122,17 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     }
 
     return `Completed ${totalCount} URLs: ${importedCount} imported, ${duplicateCount} duplicates, ${failedCount} failed.`;
-  }, [duplicateCount, failedCount, importedCount, isRunning, mode, processedCount, totalCount]);
+  }, [
+    duplicateCount,
+    failedCount,
+    importedCount,
+    isMyMiniFactoryCreatorMode,
+    isRunning,
+    isThangsCreatorMode,
+    mode,
+    processedCount,
+    totalCount,
+  ]);
 
   const resetStateForRun = (count: number) => {
     setLogs([]);
@@ -144,7 +161,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
         candidates = Array.from(new Set(splitUrls(singleSourceUrl)));
       } else if (mode === "bulk") {
         candidates = Array.from(new Set(splitUrls(sourceUrls)));
-      } else {
+      } else if (isCreatorMode) {
         const parsedMaxPages = Number.parseInt(creatorMaxPages, 10);
         const maxPages = Number.isFinite(parsedMaxPages) ? Math.min(40, Math.max(1, parsedMaxPages)) : 12;
         const creatorInput = creatorUrl.trim();
@@ -153,20 +170,26 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
           appendLog({
             url: "-",
             status: "invalid",
-            message: "Paste a Thangs creator URL first.",
+            message: isThangsCreatorMode
+              ? "Paste a Thangs creator URL first."
+              : "Paste a MyMiniFactory creator username or profile URL first.",
           });
           setFailedCount(1);
           return;
         }
 
         setCurrentUrl(creatorInput);
-        const discoveryResponse = await fetch("/api/admin/discover-thangs-creator", {
+        const discoveryEndpoint = isThangsCreatorMode
+          ? "/api/admin/discover-thangs-creator"
+          : "/api/admin/discover-myminifactory-creator";
+        const discoveryRequestBody = isThangsCreatorMode
+          ? { creatorUrl: creatorInput, maxPages }
+          : { creator: creatorInput, maxPages };
+
+        const discoveryResponse = await fetch(discoveryEndpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            creatorUrl: creatorInput,
-            maxPages,
-          }),
+          body: JSON.stringify(discoveryRequestBody),
         });
 
         const discoveryPayload = (await discoveryResponse.json().catch(() => ({}))) as CreatorDiscoveryResponse;
@@ -188,8 +211,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
           url: "-",
           status: "invalid",
           message:
-            mode === "creator"
-              ? "No model URLs were discovered from this creator page."
+            isCreatorMode
+              ? "No model URLs were discovered for this creator."
               : "Paste at least one valid URL.",
         });
         setFailedCount((value) => value + 1);
@@ -285,8 +308,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setIsModalOpen(false);
   };
 
-  const modalTitle =
-    mode === "single" ? "Import Progress" : mode === "creator" ? "Creator Import Progress" : "Bulk Import Progress";
+  const modalTitle = mode === "single" ? "Import Progress" : isCreatorMode ? "Creator Import Progress" : "Bulk Import Progress";
 
   return (
     <>
@@ -340,15 +362,19 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
         </div>
       ) : null}
 
-      {mode === "creator" ? (
+      {isCreatorMode ? (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px_180px_auto]">
             <Input
               name="creatorUrl"
-              type="url"
+              type={isThangsCreatorMode ? "url" : "text"}
               value={creatorUrl}
               onChange={(event) => setCreatorUrl(event.target.value)}
-              placeholder="https://thangs.com/designer/The%20Kit%20Kiln"
+              placeholder={
+                isThangsCreatorMode
+                  ? "https://thangs.com/designer/The%20Kit%20Kiln"
+                  : "https://www.myminifactory.com/users/ExampleCreator or ExampleCreator"
+              }
               required
             />
             <Input
@@ -373,7 +399,9 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
             </Button>
           </div>
           <p className="text-xs text-slate-500">
-            Scans creator pages one at a time, discovers model URLs, then imports each product sequentially.
+            {isThangsCreatorMode
+              ? "Scans creator pages one at a time, discovers model URLs, then imports each product sequentially."
+              : "Loads public objects from the MyMiniFactory creator API, then imports each product sequentially."}
           </p>
         </div>
       ) : null}

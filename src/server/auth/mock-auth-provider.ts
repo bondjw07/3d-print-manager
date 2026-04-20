@@ -17,6 +17,13 @@ export async function listMockUsers() {
   return prisma.user.findMany({
     where: { isActive: true },
     orderBy: [{ role: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+    },
   });
 }
 
@@ -28,7 +35,16 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+    },
+  });
   if (!user || !user.isActive) {
     return null;
   }

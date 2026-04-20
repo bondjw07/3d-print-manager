@@ -1,9 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { continueAsGuestAction, loginAsUserAction } from "@/server/auth/actions";
+import { Input } from "@/components/ui/input";
+import { continueAsGuestAction, loginWithPasswordAction } from "@/server/auth/actions";
 import { listMockUsers } from "@/server/auth/mock-auth-provider";
-import { userRoleLabels } from "@/lib/domain";
 import Link from "next/link";
 
 export default async function LoginPage({
@@ -22,7 +21,7 @@ export default async function LoginPage({
         <CardHeader>
           <CardTitle>Sign In</CardTitle>
           <CardDescription>
-            Use an existing account, or create the first admin account on first launch.
+            Sign in with your account credentials, or create the first admin account on first launch.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -45,22 +44,17 @@ export default async function LoginPage({
           ) : null}
 
           {users.length > 0 ? (
-            <form action={loginAsUserAction} className="grid gap-3 rounded-2xl border border-border bg-surface-muted p-4">
-              <label className="text-sm font-medium text-foreground" htmlFor="userId">
-                Select account
+            <form action={loginWithPasswordAction} className="grid gap-3 rounded-2xl border border-border bg-surface-muted p-4">
+              <label className="text-sm font-medium text-foreground" htmlFor="email">
+                Email
               </label>
-              <Select id="userId" name="userId" defaultValue="" required>
-                <option value="" disabled>
-                  Choose an account
-                </option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({userRoleLabels[user.role]})
-                  </option>
-                ))}
-              </Select>
+              <Input id="email" name="email" type="email" autoComplete="username" required placeholder="you@example.com" />
+              <label className="text-sm font-medium text-foreground" htmlFor="password">
+                Password
+              </label>
+              <Input id="password" name="password" type="password" autoComplete="current-password" required />
               <Button type="submit" className="w-fit">
-                Continue as selected user
+                Sign In
               </Button>
             </form>
           ) : (
@@ -79,19 +73,6 @@ export default async function LoginPage({
               Continue as guest
             </Button>
           </form>
-
-          {users.length > 0 ? (
-            <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-foreground-muted">
-              <p className="font-medium text-foreground">Active accounts</p>
-              <ul className="mt-2 space-y-1">
-                {users.map((user) => (
-                  <li key={user.id}>
-                    {user.email} - {userRoleLabels[user.role]}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </div>

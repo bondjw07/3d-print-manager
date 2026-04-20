@@ -30,6 +30,10 @@ import {
 } from "@/server/services/request-service";
 import { updateDefaultMarketplace } from "@/server/services/settings-service";
 import {
+  disconnectMyMiniFactoryOAuth,
+  saveMyMiniFactoryClientCredentials,
+} from "@/server/services/myminifactory-auth-service";
+import {
   addFilamentRequirement,
   bulkUpdateProductControls,
   createProduct,
@@ -49,6 +53,7 @@ import {
   listingBulkProductUpdateSchema,
   listingFormSchema,
   marketplaceEventSimulationSchema,
+  myMiniFactoryCredentialsSchema,
   productImportSchema,
   productFilamentRequirementSchema,
   productBulkUpdateSchema,
@@ -711,6 +716,46 @@ export async function updateSettingsAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
+}
+
+export async function updateMyMiniFactoryCredentialsAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = myMiniFactoryCredentialsSchema.safeParse(Object.fromEntries(formData));
+
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await saveMyMiniFactoryClientCredentials({
+      clientId: parsed.data.myMiniFactoryClientId,
+      clientSecret: parsed.data.myMiniFactoryClientSecret,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to save MyMiniFactory credentials.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "MyMiniFactory OAuth credentials saved. Connect OAuth to enable bulk import."));
+}
+
+export async function disconnectMyMiniFactoryOAuthAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+
+  try {
+    await disconnectMyMiniFactoryOAuth();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to disconnect MyMiniFactory OAuth.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "MyMiniFactory OAuth connection removed."));
 }
 
 export async function simulateMarketplaceEventAction(formData: FormData) {

@@ -9,7 +9,7 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
 - Prisma ORM + SQL migrations
 - Tailwind CSS
 - Zod validation
-- Mocked auth, marketplace provider, and AI listing provider behind service interfaces
+- Local credential auth, plus mocked marketplace provider and AI listing provider behind service interfaces
 - Local filesystem image storage abstraction (`/public/uploads/products`)
 
 ## What This Build Includes
@@ -20,6 +20,7 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
   - status/visibility management
   - product detail view with related listings/requests/queue
   - URL import workflow for draft product creation (Thangs + MyMiniFactory)
+  - creator bulk import (Thangs page discovery + MyMiniFactory public creator API)
   - duplicate prevention using stable source product IDs
 - Product image management
   - upload images
@@ -47,6 +48,7 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
   - process sale events into queue items and inventory commitment
 - Global settings
   - default marketplace for public Buy button logic
+  - MyMiniFactory OAuth credential + token configuration for creator bulk imports
 - Seeded demo dataset (users, products, filaments, listings, requests, queue, inventory, events)
 
 ## Local Setup
@@ -64,6 +66,7 @@ docker compose up -d
 ```
 
 Default DB credentials are defined in `docker-compose.yml` and `.env`.
+Set `APP_ENCRYPTION_KEY` in `.env` before saving MyMiniFactory OAuth credentials. Set `APP_URL` to your app base URL for OAuth callback/refresh consistency.
 
 ### 3) Generate Prisma client + apply migrations
 
@@ -86,13 +89,13 @@ npm run dev
 
 Open: [http://localhost:3000](http://localhost:3000)
 
-## Seeded Mock Users
+## Seeded Users
 
-Use `/login` to switch persona:
+Use `/login` with these demo credentials:
 
-- `admin@portal.local` (ADMIN)
-- `alex@portal.local` (REQUEST_USER)
-- `mia@portal.local` (REQUEST_USER)
+- `admin@portal.local` / `admin123!` (ADMIN)
+- `alex@portal.local` / `alex123!` (REQUEST_USER)
+- `mia@portal.local` / `mia123!` (REQUEST_USER)
 
 ## Key Routes
 
@@ -114,15 +117,20 @@ Admin:
 - `/admin/inventory`
 - `/admin/settings`
 
-On `/admin/products`, use **Import Product From URL** to create a draft product from a source link.
-Current MVP support: `thangs.com` and `myminifactory.com` URLs.
+On `/admin/products`, use **Imports** for:
+
+- single URL import (`thangs.com` and `myminifactory.com`)
+- bulk URL import
+- Thangs creator bulk import
+- MyMiniFactory creator bulk import (public objects only, requires OAuth setup in `/admin/settings`)
+
 Imports are deduped by source + source product ID when available, with URL fallback matching.
 
 ## Architecture Notes
 
 - `src/server/services/*`: domain/business logic
 - `src/server/actions/portal-actions.ts`: validated server actions
-- `src/server/auth/*`: mocked auth/session boundaries
+- `src/server/auth/*`: credential auth/session boundaries (ready for provider swap)
 - `src/server/marketplace/*`: mocked marketplace adapter interface
 - `src/server/ai/*`: mocked AI content adapter interface
 - `src/server/storage/*`: storage abstraction + local implementation
@@ -133,11 +141,12 @@ Imports are deduped by source + source product ID when available, with URL fallb
 - Prisma schema: `prisma/schema.prisma`
 - Initial migration: `prisma/migrations/202604130001_initial/migration.sql`
 - Import dedupe migration: `prisma/migrations/202604130002_add_import_identity_dedupe/migration.sql`
+- User password hash migration: `prisma/migrations/202604200004_add_user_password_hash/migration.sql`
 - Seed script: `prisma/seed.ts`
 
 ## Notes
 
-- This MVP is intentionally mocked for auth/marketplace/AI while preserving clean extension points.
+- This MVP is intentionally mocked for marketplace/AI while preserving clean extension points.
 - Product images include seeded placeholders under `public/seed-images` plus runtime uploads under `public/uploads/products`.
 
 ## Deployment (Unraid, Self-Contained)

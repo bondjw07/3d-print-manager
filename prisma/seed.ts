@@ -13,6 +13,7 @@ import {
   SyncStatus,
   UserRole,
 } from "../src/generated/prisma/client";
+import { hashPassword } from "../src/server/auth/password";
 
 const prisma = new PrismaClient();
 
@@ -20,6 +21,12 @@ const users = {
   admin: "user_admin",
   alex: "user_alex",
   mia: "user_mia",
+} as const;
+
+const seededUserPasswords = {
+  admin: "admin123!",
+  alex: "alex123!",
+  mia: "mia123!",
 } as const;
 
 const filaments = {
@@ -164,12 +171,19 @@ async function main() {
     },
   });
 
+  const [adminPasswordHash, alexPasswordHash, miaPasswordHash] = await Promise.all([
+    hashPassword(seededUserPasswords.admin),
+    hashPassword(seededUserPasswords.alex),
+    hashPassword(seededUserPasswords.mia),
+  ]);
+
   await prisma.user.createMany({
     data: [
       {
         id: users.admin,
         name: "Avery Print Ops",
         email: "admin@portal.local",
+        passwordHash: adminPasswordHash,
         role: UserRole.ADMIN,
         isActive: true,
       },
@@ -177,6 +191,7 @@ async function main() {
         id: users.alex,
         name: "Alex Rivera",
         email: "alex@portal.local",
+        passwordHash: alexPasswordHash,
         role: UserRole.REQUEST_USER,
         isActive: true,
       },
@@ -184,6 +199,7 @@ async function main() {
         id: users.mia,
         name: "Mia Chen",
         email: "mia@portal.local",
+        passwordHash: miaPasswordHash,
         role: UserRole.REQUEST_USER,
         isActive: true,
       },

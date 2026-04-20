@@ -156,6 +156,11 @@ export const settingsSchema = z.object({
   defaultMarketplace: z.nativeEnum(MarketplaceType),
 });
 
+export const myMiniFactoryCredentialsSchema = z.object({
+  myMiniFactoryClientId: z.string().trim().min(2, "Client ID is required."),
+  myMiniFactoryClientSecret: z.string().trim().min(4, "Client secret is required."),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

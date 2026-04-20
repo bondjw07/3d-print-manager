@@ -52,6 +52,30 @@ export default async function SetupPage({
               Admin email
             </label>
             <Input id="email" name="email" type="email" required placeholder="admin@example.com" />
+            <label className="text-sm font-medium text-foreground" htmlFor="password">
+              Password
+            </label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              placeholder="At least 8 characters"
+            />
+            <label className="text-sm font-medium text-foreground" htmlFor="confirmPassword">
+              Confirm password
+            </label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              placeholder="Re-enter password"
+            />
             {allowSetupTest ? <input type="hidden" name="allowWhenAdminExists" value="1" /> : null}
             <Button type="submit" className="w-fit">
               Create Admin Account

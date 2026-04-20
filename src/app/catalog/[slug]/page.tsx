@@ -163,11 +163,9 @@ export default async function ProductDetailPage({
               </form>
             ) : (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-800">
-                <p>
-                  Sign in as a request user to submit this request. Use the mock account switcher for local development.
-                </p>
+                <p>Sign in as a request user to submit this request.</p>
                 <Link href="/login" className="mt-2 inline-block font-medium text-sky-900 underline">
-                  Go to mock login
+                  Go to sign in
                 </Link>
               </div>
             )}

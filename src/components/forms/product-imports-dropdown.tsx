@@ -30,6 +30,11 @@ const importOptions: ImportOption[] = [
     description: "Discover all products from a Thangs creator page and import sequentially.",
   },
   {
+    mode: "creatorMmf",
+    label: "Import MyMiniFactory Creator",
+    description: "Discover public objects for a MyMiniFactory creator via API and import sequentially.",
+  },
+  {
     mode: "filamentWeightsCsv",
     label: "Import Filament Weights CSV",
     description: "Upload a model-weight CSV, review fuzzy matches, then apply selected product/filament updates.",
