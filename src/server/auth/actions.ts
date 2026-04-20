@@ -5,6 +5,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSessionUser, setSessionUser } from "./mock-auth-provider";
 
+function encodeError(message: string) {
+  return encodeURIComponent(message);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export async function loginAsUserAction(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
 
@@ -37,4 +45,50 @@ export async function continueAsGuestAction() {
   await clearSessionUser();
   revalidatePath("/", "layout");
   redirect("/catalog");
+}
+
+export async function createInitialAdminAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!name || !email) {
+    redirect(`/login?error=${encodeError("Name and email are required.")}`);
+  }
+
+  if (!isValidEmail(email)) {
+    redirect(`/login?error=${encodeError("Enter a valid email address.")}`);
+  }
+
+  const existingAdmin = await prisma.user.findFirst({
+    where: { role: "ADMIN", isActive: true },
+    select: { id: true },
+  });
+
+  if (existingAdmin) {
+    redirect(`/login?error=${encodeError("An active admin account already exists.")}`);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, isActive: true },
+  });
+
+  if (existingUser) {
+    redirect(`/login?error=${encodeError("A user with that email already exists.")}`);
+  }
+
+  const admin = await prisma.user.create({
+    data: {
+      name,
+      email,
+      role: "ADMIN",
+      isActive: true,
+    },
+  });
+
+  await setSessionUser(admin.id);
+  revalidatePath("/", "layout");
+  redirect("/admin");
 }

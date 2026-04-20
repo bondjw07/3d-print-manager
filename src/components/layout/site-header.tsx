@@ -46,7 +46,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
             </>
           ) : (
             <Link href="/login">
-              <Button size="sm">Mock Login</Button>
+              <Button size="sm">Sign In</Button>
             </Link>
           )}
         </div>
