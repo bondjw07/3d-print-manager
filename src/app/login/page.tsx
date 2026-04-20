@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { continueAsGuestAction, createInitialAdminAction, loginAsUserAction } from "@/server/auth/actions";
+import { continueAsGuestAction, loginAsUserAction } from "@/server/auth/actions";
 import { listMockUsers } from "@/server/auth/mock-auth-provider";
 import { userRoleLabels } from "@/lib/domain";
+import Link from "next/link";
 
 export default async function LoginPage({
   searchParams,
@@ -14,6 +14,7 @@ export default async function LoginPage({
   const users = await listMockUsers();
   const params = await searchParams;
   const hasActiveAdmin = users.some((user) => user.role === "ADMIN");
+  const setupTestModeEnabled = process.env.ENABLE_INITIAL_ADMIN_TEST_MODE === "true";
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -34,29 +35,18 @@ export default async function LoginPage({
             </p>
           ) : null}
 
-          {!hasActiveAdmin ? (
-            <form action={createInitialAdminAction} className="grid gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
-              <p className="text-sm font-medium text-slate-900">Initial setup required</p>
-              <p className="text-sm text-slate-700">
-                No active admin user exists yet. Create the first admin account to finish setup.
-              </p>
-              <label className="text-sm font-medium text-slate-700" htmlFor="name">
-                Admin name
-              </label>
-              <Input id="name" name="name" required placeholder="Jane Doe" />
-              <label className="text-sm font-medium text-slate-700" htmlFor="email">
-                Admin email
-              </label>
-              <Input id="email" name="email" type="email" required placeholder="admin@example.com" />
-              <Button type="submit" className="w-fit">
-                Create Initial Admin
-              </Button>
-            </form>
+          {setupTestModeEnabled ? (
+            <div className="rounded-2xl border border-border bg-surface-muted px-4 py-3 text-sm text-foreground">
+              Need to validate first-launch setup?
+              <Link href="/setup?testSetup=1" className="ml-1 font-medium underline">
+                Test Initial Setup Wizard
+              </Link>
+            </div>
           ) : null}
 
           {users.length > 0 ? (
-            <form action={loginAsUserAction} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <label className="text-sm font-medium text-slate-700" htmlFor="userId">
+            <form action={loginAsUserAction} className="grid gap-3 rounded-2xl border border-border bg-surface-muted p-4">
+              <label className="text-sm font-medium text-foreground" htmlFor="userId">
                 Select account
               </label>
               <Select id="userId" name="userId" defaultValue="" required>
@@ -74,9 +64,14 @@ export default async function LoginPage({
               </Button>
             </form>
           ) : (
-            <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              No active users are available yet.
-            </p>
+            <div className="rounded-2xl border border-border bg-surface-muted px-4 py-3 text-sm text-foreground-muted">
+              <p>No active users are available yet.</p>
+              {!hasActiveAdmin ? (
+                <Link href="/setup" className="mt-1 inline-block font-medium text-foreground underline">
+                  Continue setup
+                </Link>
+              ) : null}
+            </div>
           )}
 
           <form action={continueAsGuestAction}>
@@ -86,8 +81,8 @@ export default async function LoginPage({
           </form>
 
           {users.length > 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-              <p className="font-medium text-slate-900">Active accounts</p>
+            <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-foreground-muted">
+              <p className="font-medium text-foreground">Active accounts</p>
               <ul className="mt-2 space-y-1">
                 {users.map((user) => (
                   <li key={user.id}>

@@ -52,6 +52,8 @@ export async function createInitialAdminAction(formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
+  const allowWhenAdminExists = String(formData.get("allowWhenAdminExists") ?? "") === "1";
+  const bootstrapTestModeEnabled = process.env.ENABLE_INITIAL_ADMIN_TEST_MODE === "true";
 
   if (!name || !email) {
     redirect(`/login?error=${encodeError("Name and email are required.")}`);
@@ -66,7 +68,7 @@ export async function createInitialAdminAction(formData: FormData) {
     select: { id: true },
   });
 
-  if (existingAdmin) {
+  if (existingAdmin && !(allowWhenAdminExists && bootstrapTestModeEnabled)) {
     redirect(`/login?error=${encodeError("An active admin account already exists.")}`);
   }
 
