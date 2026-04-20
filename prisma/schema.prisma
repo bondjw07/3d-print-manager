@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  REQUEST_USER
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  HIDDEN
+  ARCHIVED
+  OUT_OF_STOCK
+  RETIRED
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  INACTIVE
+  REMOVED
+  ERROR
+}
+
+enum SyncStatus {
+  NOT_SYNCED
+  IN_SYNC
+  OUT_OF_SYNC
+  NEEDS_REVIEW
+  FAILED
+}
+
+enum RequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  QUEUED
+  COMPLETED
+  CANCELLED
+}
+
+enum QueueStatus {
+  PENDING
+  READY_TO_PRINT
+  PRINTING
+  POST_PROCESSING
+  PACKED
+  READY_FOR_PICKUP
+  SHIPPED
+  COMPLETED
+  CANCELLED
+  BLOCKED
+}
+
+enum InventoryMode {
+  STOCKED
+  MADE_TO_ORDER
+  LIMITED
+  UNAVAILABLE
+}
+
+enum MarketplaceType {
+  ETSY
+  EBAY
+  SHOPIFY
+}
+
+enum ProductImportSource {
+  THANGS
+  MY_MINI_FACTORY
+  LOOT_STUDIOS
+}
+
+enum QueueSourceType {
+  REQUEST
+  MARKETPLACE
+  MANUAL
+  RESTOCK
+}
+
+enum QueuePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MarketplaceEventType {
+  SALE_OCCURRED
+  LISTING_REMOVED
+  LISTING_CHANGED_EXTERNALLY
+}
+
+enum EventProcessingStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests  Request[]  @relation("UserRequests")
+  queueItems QueueItem[] @relation("QueueRequester")
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  slug             String        @unique
+  internalName     String
+  publicName       String
+  shortDescription String
+  fullDescription  String
+  category         String
+  tags             String[]
+  sku              String        @unique
+  status           ProductStatus @default(DRAFT)
+  isPublic         Boolean       @default(false)
+  isRequestable    Boolean       @default(false)
+  isListable       Boolean       @default(false)
+  inventoryMode    InventoryMode @default(STOCKED)
+  lengthMm         Decimal?      @db.Decimal(8, 2)
+  widthMm          Decimal?      @db.Decimal(8, 2)
+  heightMm         Decimal?      @db.Decimal(8, 2)
+  itemWeightGrams  Decimal?      @db.Decimal(8, 2)
+  packagingType    String?
+  productionNotes  String?
+  printNotes       String?
+  importSource              ProductImportSource?
+  importSourceReferenceId   String?
+  importSourceUrl           String?
+  importSourceNormalizedUrl String?
+  importSourceCreatorName   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  images               ProductImage[]
+  filamentRequirements ProductFilamentRequirement[]
+  listings             MarketplaceListing[]
+  requests             Request[]
+  queueItems           QueueItem[]
+  inventoryRecord      InventoryRecord?
+  marketplaceEvents    MarketplaceEvent[]
+
+  @@index([status, isPublic])
+  @@index([category])
+  @@unique([importSource, importSourceReferenceId])
+  @@unique([importSource, importSourceNormalizedUrl])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  imagePath String
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+model Filament {
+  id           String   @id @default(cuid())
+  name         String
+  brand        String?
+  colorLabel   String
+  materialType String
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  productRequirements ProductFilamentRequirement[]
+
+  @@index([materialType, isActive])
+}
+
+model ProductFilamentRequirement {
+  id                     String   @id @default(cuid())
+  productId              String
+  filamentId             String
+  estimatedGramsPerPrint Decimal? @db.Decimal(8, 2)
+  sortOrder              Int      @default(0)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  filament Filament @relation(fields: [filamentId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, filamentId])
+  @@index([productId, sortOrder])
+}
+
+model MarketplaceListing {
+  id                String          @id @default(cuid())
+  productId         String
+  marketplaceType   MarketplaceType
+  externalListingId String?
+  title             String
+  description       String
+  tags              String[]
+  price             Decimal         @db.Decimal(10, 2)
+  externalUrl       String?
+  status            ListingStatus   @default(DRAFT)
+  syncStatus        SyncStatus      @default(NOT_SYNCED)
+  lastSyncedAt      DateTime?
+  lastSyncMessage   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  events  MarketplaceEvent[]
+
+  @@unique([productId, marketplaceType])
+  @@index([marketplaceType, status, syncStatus])
+}
+
+model Request {
+  id              String        @id @default(cuid())
+  requesterUserId String
+  productId       String
+  quantity        Int
+  notes           String?
+  status          RequestStatus @default(SUBMITTED)
+  adminNotes      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  requesterUser User      @relation("UserRequests", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  queueItems    QueueItem[] @relation("RequestQueueItems")
+
+  @@index([requesterUserId, status])
+  @@index([productId])
+}
+
+model QueueItem {
+  id              String          @id @default(cuid())
+  productId       String
+  sourceType      QueueSourceType
+  sourceReferenceId String?
+  sourceRequestId String?
+  requesterUserId String?
+  quantity        Int
+  status          QueueStatus     @default(PENDING)
+  priority        QueuePriority   @default(NORMAL)
+  dueDate         DateTime?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sourceRequest Request? @relation("RequestQueueItems", fields: [sourceRequestId], references: [id], onDelete: SetNull)
+  requesterUser User?    @relation("QueueRequester", fields: [requesterUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, priority])
+  @@index([sourceType])
+  @@index([productId])
+}
+
+model InventoryRecord {
+  id               String   @id @default(cuid())
+  productId         String   @unique
+  onHand            Int      @default(0)
+  reserved          Int      @default(0)
+  committed         Int      @default(0)
+  available         Int      @default(0)
+  reorderThreshold  Int?
+  updatedAt         DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([available])
+}
+
+model MarketplaceEvent {
+  id               String                @id @default(cuid())
+  marketplaceType  MarketplaceType
+  eventType        MarketplaceEventType
+  payloadSummary   String
+  relatedListingId String?
+  relatedProductId String?
+  processingStatus EventProcessingStatus @default(PENDING)
+  processingMessage String?
+  createdAt        DateTime              @default(now())
+  processedAt      DateTime?
+
+  relatedListing MarketplaceListing? @relation(fields: [relatedListingId], references: [id], onDelete: SetNull)
+  relatedProduct Product?            @relation(fields: [relatedProductId], references: [id], onDelete: SetNull)
+
+  @@index([marketplaceType, processingStatus])
+  @@index([eventType, createdAt])
+}
+
+model AppSetting {
+  id                 String          @id @default("app")
+  defaultMarketplace MarketplaceType @default(ETSY)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+}
