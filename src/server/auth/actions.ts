@@ -45,7 +45,7 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect("/admin");
   }
 
-  redirect("/my-requests");
+  redirect("/catalog");
 }
 
 export async function logoutAction() {
@@ -54,8 +54,50 @@ export async function logoutAction() {
   redirect("/catalog");
 }
 
-export async function continueAsGuestAction() {
-  await clearSessionUser();
+export async function signupRequestUserAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!name || !email || !password || !confirmPassword) {
+    redirect(`/signup?error=${encodeError("Name, email, and password are required.")}`);
+  }
+
+  if (!isValidEmail(email)) {
+    redirect(`/signup?error=${encodeError("Enter a valid email address.")}`);
+  }
+
+  if (password.length < 8) {
+    redirect(`/signup?error=${encodeError("Password must be at least 8 characters.")}`);
+  }
+
+  if (password !== confirmPassword) {
+    redirect(`/signup?error=${encodeError("Passwords do not match.")}`);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    redirect(`/signup?error=${encodeError("A user with that email already exists.")}`);
+  }
+
+  const newUser = await prisma.user.create({
+    data: {
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+      role: "REQUEST_USER",
+      isActive: true,
+    },
+  });
+
+  await setSessionUser(newUser.id);
   revalidatePath("/", "layout");
   redirect("/catalog");
 }

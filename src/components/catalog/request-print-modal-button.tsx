@@ -5,7 +5,14 @@ import { useId, useState } from "react";
 import { submitRequestAction } from "@/server/actions/portal-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+type RequestAsOption = {
+  id: string;
+  name: string;
+  email: string;
+};
 
 type RequestPrintModalButtonProps = {
   productId: string;
@@ -13,6 +20,9 @@ type RequestPrintModalButtonProps = {
   productSlug: string;
   redirectTo: string;
   canSubmitRequest: boolean;
+  isAdmin?: boolean;
+  requestAsOptions?: RequestAsOption[];
+  requestAsDefaultUserId?: string;
   buttonLabel?: string;
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
   buttonClassName?: string;
@@ -24,6 +34,9 @@ export function RequestPrintModalButton({
   productSlug,
   redirectTo,
   canSubmitRequest,
+  isAdmin = false,
+  requestAsOptions = [],
+  requestAsDefaultUserId,
   buttonLabel = "Request",
   buttonVariant = "secondary",
   buttonClassName,
@@ -66,6 +79,25 @@ export function RequestPrintModalButton({
               <form action={submitRequestAction} className="mt-4 grid gap-3">
                 <input type="hidden" name="redirectTo" value={redirectTo} />
                 <input type="hidden" name="productId" value={productId} />
+                {isAdmin ? (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={`${productId}-requestAsUserId`}>
+                      Request as
+                    </label>
+                    <Select
+                      id={`${productId}-requestAsUserId`}
+                      name="requestAsUserId"
+                      defaultValue={requestAsDefaultUserId ?? ""}
+                      required
+                    >
+                      {requestAsOptions.map((requestAsUser) => (
+                        <option key={requestAsUser.id} value={requestAsUser.id}>
+                          {requestAsUser.name} ({requestAsUser.email})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={`${productId}-quantity`}>
                     Quantity

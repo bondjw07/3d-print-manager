@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { humanizeEnum } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
 import { submitRequestAction } from "@/server/actions/portal-actions";
@@ -51,6 +53,13 @@ export default async function ProductDetailPage({
       listing.status === "PUBLISHED" &&
       listing.externalUrl,
   );
+  const requestAsUsers =
+    user?.role === "ADMIN"
+      ? await prisma.user.findMany({
+          select: { id: true, name: true, email: true },
+          orderBy: [{ name: "asc" }, { email: "asc" }],
+        })
+      : [];
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -141,6 +150,20 @@ export default async function ProductDetailPage({
               <form action={submitRequestAction} className="grid gap-3 sm:max-w-xl">
                 <input type="hidden" name="redirectTo" value={`/catalog/${product.slug}`} />
                 <input type="hidden" name="productId" value={product.id} />
+                {user.role === "ADMIN" ? (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="requestAsUserId">
+                      Request as
+                    </label>
+                    <Select id="requestAsUserId" name="requestAsUserId" defaultValue={user.id} required>
+                      {requestAsUsers.map((requestAsUser) => (
+                        <option key={requestAsUser.id} value={requestAsUser.id}>
+                          {requestAsUser.name} ({requestAsUser.email})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="quantity">
                     Quantity

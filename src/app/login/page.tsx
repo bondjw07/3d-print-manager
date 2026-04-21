@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { continueAsGuestAction, loginWithPasswordAction } from "@/server/auth/actions";
+import { loginWithPasswordAction } from "@/server/auth/actions";
 import { listMockUsers } from "@/server/auth/mock-auth-provider";
 import Link from "next/link";
 
@@ -21,7 +21,8 @@ export default async function LoginPage({
         <CardHeader>
           <CardTitle>Sign In</CardTitle>
           <CardDescription>
-            Sign in with your account credentials, or create the first admin account on first launch.
+            Sign in with your account credentials, sign up for a request account, or create the first admin account on first
+            launch.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -68,9 +69,9 @@ export default async function LoginPage({
             </div>
           )}
 
-          <form action={continueAsGuestAction}>
+          <form action="/signup" method="get">
             <Button type="submit" variant="secondary">
-              Continue as guest
+              Sign up
             </Button>
           </form>
         </CardContent>

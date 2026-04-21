@@ -9,6 +9,7 @@ import {
   QueueStatus,
   RequestStatus,
   SyncStatus,
+  UserRole,
 } from "@/generated/prisma/client";
 import { z } from "zod";
 
@@ -111,6 +112,20 @@ export const requestCreateSchema = z.object({
   productId: z.string().trim().min(1),
   quantity: z.coerce.number().int().min(1).max(50),
   notes: z.string().trim().max(500).optional(),
+  requestAsUserId: z
+    .preprocess((value) => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }, z.string().min(1).optional()),
+});
+
+export const requestUserUpdateSchema = z.object({
+  quantity: z.coerce.number().int().min(1).max(50),
+  notes: z.string().trim().max(500).optional(),
 });
 
 export const requestAdminUpdateSchema = z.object({
@@ -134,6 +149,11 @@ export const queueUpdateSchema = z.object({
   status: z.nativeEnum(QueueStatus),
   priority: z.nativeEnum(QueuePriority),
   notes: z.string().trim().max(1000).optional(),
+});
+
+export const userAdminUpdateSchema = z.object({
+  role: z.nativeEnum(UserRole),
+  isActive: boolLike,
 });
 
 export const inventoryUpdateSchema = z.object({

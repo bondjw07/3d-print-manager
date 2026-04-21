@@ -22,7 +22,7 @@ export default async function RootLayout({
     <html lang="en" className="h-full antialiased" data-theme={initialTheme} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground">
         <div className="flex min-h-full flex-col">
-          <SiteHeader user={user} />
+          <SiteHeader user={user} initialTheme={initialTheme} />
           <main className="flex-1">{children}</main>
         </div>
       </body>

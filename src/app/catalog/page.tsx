@@ -10,6 +10,7 @@ import { getPublicProducts } from "@/server/services/product-service";
 import { getDefaultMarketplace } from "@/server/services/settings-service";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
 import { getRequestSummariesForUserByProductIds } from "@/server/services/request-service";
+import { prisma } from "@/lib/prisma";
 import { humanizeEnum } from "@/lib/domain";
 
 export default async function CatalogPage({
@@ -32,6 +33,13 @@ export default async function CatalogPage({
         products.map((product) => product.id),
       )
     : new Map();
+  const requestAsUsers =
+    user?.role === "ADMIN"
+      ? await prisma.user.findMany({
+          select: { id: true, name: true, email: true },
+          orderBy: [{ name: "asc" }, { email: "asc" }],
+        })
+      : [];
   const canSubmitRequest = user?.role === "REQUEST_USER" || user?.role === "ADMIN";
   const redirectTo = q ? `/catalog?${new URLSearchParams({ q }).toString()}` : "/catalog";
 
@@ -120,6 +128,9 @@ export default async function CatalogPage({
                         productSlug={product.slug}
                         redirectTo={redirectTo}
                         canSubmitRequest={canSubmitRequest}
+                        isAdmin={user?.role === "ADMIN"}
+                        requestAsOptions={requestAsUsers}
+                        requestAsDefaultUserId={user?.id}
                         buttonLabel={requestSummary ? "Requested" : "Request"}
                         buttonVariant={requestSummary ? "success" : "secondary"}
                         buttonClassName={requestSummary ? undefined : "ml-auto"}

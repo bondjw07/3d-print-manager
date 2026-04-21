@@ -4,6 +4,7 @@ import {
   MarketplaceEventType,
   ProductStatus,
 } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { humanizeEnum, productStatusOptions } from "@/lib/domain";
 import { localProductImageStorage } from "@/server/storage/local-storage-service";
 import { revalidatePath } from "next/cache";
@@ -26,9 +27,12 @@ import { createQueueItem, updateQueueItem } from "@/server/services/queue-servic
 import {
   convertRequestToQueue,
   createRequestForUser,
+  deleteSubmittedRequestForUser,
+  updateSubmittedRequestForUser,
   updateRequestByAdmin,
 } from "@/server/services/request-service";
 import { updateDefaultMarketplace } from "@/server/services/settings-service";
+import { updateUserByAdmin } from "@/server/services/user-service";
 import {
   disconnectMyMiniFactoryOAuth,
   saveMyMiniFactoryClientCredentials,
@@ -63,7 +67,9 @@ import {
   queueUpdateSchema,
   requestAdminUpdateSchema,
   requestCreateSchema,
+  requestUserUpdateSchema,
   settingsSchema,
+  userAdminUpdateSchema,
 } from "@/server/validation/schemas";
 
 function firstIssueMessage(error: { issues?: { message: string }[] }) {
@@ -597,26 +603,117 @@ export async function runListingActionAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", `Mock ${action} completed.`));
 }
 
+export async function updateUserByAdminAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const userId = String(formData.get("userId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/users");
+  const parsed = userAdminUpdateSchema.safeParse(Object.fromEntries(formData));
+
+  if (!userId || !parsed.success) {
+    redirect(appendStatus(redirectTo, "error", parsed.success ? "User id is required." : firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await updateUserByAdmin(userId, parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update user.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/queue");
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  redirect(appendStatus(redirectTo, "success", "User updated."));
+}
+
 export async function submitRequestAction(formData: FormData) {
   const user = await requireRole(["REQUEST_USER", "ADMIN"]);
 
-  const redirectTo = String(formData.get("redirectTo") ?? "/my-requests");
+  const redirectTo = String(formData.get("redirectTo") ?? "/requests");
   const parsed = requestCreateSchema.safeParse(Object.fromEntries(formData));
 
   if (!parsed.success) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   }
 
+  if (user.role !== "ADMIN" && parsed.data.requestAsUserId && parsed.data.requestAsUserId !== user.id) {
+    redirect(appendStatus(redirectTo, "error", "Only admins can request on behalf of another user."));
+  }
+
+  const requesterUserId = user.role === "ADMIN" ? (parsed.data.requestAsUserId ?? user.id) : user.id;
+  const requesterUser = await prisma.user.findUnique({
+    where: { id: requesterUserId },
+    select: { id: true },
+  });
+
+  if (!requesterUser) {
+    redirect(appendStatus(redirectTo, "error", "Selected requester was not found."));
+  }
+
   await createRequestForUser({
-    requesterUserId: user.id,
+    requesterUserId: requesterUser.id,
     productId: parsed.data.productId,
     quantity: parsed.data.quantity,
     notes: parsed.data.notes,
   });
 
+  revalidatePath("/catalog");
+  revalidatePath("/requests");
   revalidatePath("/my-requests");
   revalidatePath("/admin/requests");
   redirect(appendStatus(redirectTo, "success", "Request submitted."));
+}
+
+export async function updateOwnRequestAction(formData: FormData) {
+  const user = await requireRole(["REQUEST_USER", "ADMIN"]);
+
+  const requestId = String(formData.get("requestId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/requests");
+  const parsed = requestUserUpdateSchema.safeParse(Object.fromEntries(formData));
+
+  if (!requestId || !parsed.success) {
+    redirect(appendStatus(redirectTo, "error", parsed.success ? "Request id is required." : firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await updateSubmittedRequestForUser(requestId, user.id, parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update request.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/catalog");
+  revalidatePath("/requests");
+  revalidatePath("/my-requests");
+  revalidatePath("/admin/requests");
+  redirect(appendStatus(redirectTo, "success", "Request updated."));
+}
+
+export async function deleteOwnRequestAction(formData: FormData) {
+  const user = await requireRole(["REQUEST_USER", "ADMIN"]);
+
+  const requestId = String(formData.get("requestId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/requests");
+
+  if (!requestId) {
+    redirect(appendStatus(redirectTo, "error", "Request id is required."));
+  }
+
+  try {
+    await deleteSubmittedRequestForUser(requestId, user.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete request.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/catalog");
+  revalidatePath("/requests");
+  revalidatePath("/my-requests");
+  revalidatePath("/admin/requests");
+  redirect(appendStatus(redirectTo, "success", "Request deleted."));
 }
 
 export async function updateRequestByAdminAction(formData: FormData) {
@@ -632,6 +729,7 @@ export async function updateRequestByAdminAction(formData: FormData) {
 
   await updateRequestByAdmin(requestId, parsed.data);
   revalidatePath("/admin/requests");
+  revalidatePath("/requests");
   revalidatePath("/my-requests");
   redirect(appendStatus(redirectTo, "success", "Request updated."));
 }
@@ -650,6 +748,7 @@ export async function convertRequestToQueueAction(formData: FormData) {
   revalidatePath("/admin/requests");
   revalidatePath("/admin/queue");
   revalidatePath("/admin/inventory");
+  revalidatePath("/requests");
   revalidatePath("/my-requests");
   redirect(appendStatus(redirectTo, "success", "Request converted to queue item."));
 }

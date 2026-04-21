@@ -82,7 +82,7 @@ export async function requireRole(allowedRoles: UserRole | UserRole[]) {
 
   if (!roles.includes(user.role)) {
     if (user.role === "REQUEST_USER") {
-      redirect("/my-requests");
+      redirect("/requests");
     }
 
     redirect("/catalog");

@@ -107,6 +107,45 @@ export async function createRequestForUser(input: {
   });
 }
 
+export async function updateSubmittedRequestForUser(
+  requestId: string,
+  requesterUserId: string,
+  input: {
+    quantity: number;
+    notes?: string;
+  },
+) {
+  const updated = await prisma.request.updateMany({
+    where: {
+      id: requestId,
+      requesterUserId,
+      status: RequestStatus.SUBMITTED,
+    },
+    data: {
+      quantity: input.quantity,
+      notes: input.notes || null,
+    },
+  });
+
+  if (updated.count === 0) {
+    throw new Error("Only submitted requests can be edited.");
+  }
+}
+
+export async function deleteSubmittedRequestForUser(requestId: string, requesterUserId: string) {
+  const deleted = await prisma.request.deleteMany({
+    where: {
+      id: requestId,
+      requesterUserId,
+      status: RequestStatus.SUBMITTED,
+    },
+  });
+
+  if (deleted.count === 0) {
+    throw new Error("Only submitted requests can be deleted.");
+  }
+}
+
 export async function updateRequestByAdmin(
   requestId: string,
   input: {
