@@ -570,6 +570,7 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
   const filamentGuessResult = await guessAndApplyFilamentRequirements({
     productId: product.id,
     sourceText: buildFilamentGuessSourceText(imported),
+    createMissingFilaments: imported.source === "THANGS",
   });
 
   return {
@@ -625,6 +626,7 @@ export async function refreshProductFromSourceUrl(input: {
   const filamentGuessResult = await guessAndApplyFilamentRequirements({
     productId: product.id,
     sourceText: buildFilamentGuessSourceText(imported),
+    createMissingFilaments: imported.source === "THANGS",
   });
 
   return {

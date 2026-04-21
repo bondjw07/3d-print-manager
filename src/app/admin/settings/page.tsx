@@ -1,10 +1,12 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmSubmitModalButton } from "@/components/ui/confirm-submit-modal-button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
 import {
+  deleteAllProductsAction,
   disconnectMyMiniFactoryOAuthAction,
   updateMyMiniFactoryCredentialsAction,
   updateSettingsAction,
@@ -164,6 +166,36 @@ export default async function AdminSettingsPage({
           <p className="text-xs text-slate-500">
             OAuth callback path: <code>/api/admin/myminifactory/oauth/callback</code>
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-rose-200">
+        <CardHeader>
+          <CardTitle className="text-rose-700">Bulk Operations (Danger Zone)</CardTitle>
+          <CardDescription className="text-rose-700">
+            These operations are destructive and cannot be reversed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <p className="text-sm font-semibold text-rose-800">Delete All Products</p>
+            <p className="mt-1 text-sm text-rose-700">
+              Permanently deletes all products and removes linked queue items and requests. This action cannot be undone.
+            </p>
+            <form action={deleteAllProductsAction} className="mt-3">
+              <input type="hidden" name="redirectTo" value="/admin/settings" />
+              <ConfirmSubmitModalButton
+                variant="danger"
+                confirmTitle="Delete All Products?"
+                confirmMessage="This will permanently delete every product in the system and remove linked queue/request records. This cannot be undone."
+                confirmLabel="Yes, Delete Everything"
+                confirmationKeyword="delete"
+                confirmationInputName="confirmWord"
+              >
+                Delete All Products
+              </ConfirmSubmitModalButton>
+            </form>
+          </div>
         </CardContent>
       </Card>
     </div>

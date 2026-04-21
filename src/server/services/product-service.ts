@@ -37,6 +37,131 @@ function isUnknownImportIdentityArgumentError(error: unknown) {
   );
 }
 
+const detectedFilamentMaterialPattern = /\b(PLA|PETG|ABS|ASA|TPU)\b/i;
+const filamentLineValuePatterns = [
+  /\bfilaments?\b(?:\s+(?:used|use|required|requirements?|types?|colors?))?\s*[:\-]\s*(.+)$/i,
+  /\bfilaments?\b(?:\s+(?:used|use|required|requirements?|types?|colors?))?\s+(?:are|is)\s+(.+)$/i,
+];
+const invalidFilamentTokens = new Set(["none", "n/a", "na", "unknown", "various", "multiple"]);
+
+type AutoCreateFilamentCandidate = {
+  name: string;
+  colorLabel: string;
+  materialType: string;
+  nameLookupKey: string;
+  colorLookupKey: string;
+  combinedLookupKey: string;
+};
+
+function normalizeFilamentLookupKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’'`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function extractFilamentLineValue(rawLine: string) {
+  const cleaned = rawLine
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`>#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  for (const pattern of filamentLineValuePatterns) {
+    const match = cleaned.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function toAutoCreateFilamentCandidate(rawValue: string): AutoCreateFilamentCandidate | null {
+  let cleaned = rawValue
+    .replace(/\[[^\]]*]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:g|grams?)\b/gi, " ")
+    .replace(/\b(?:approximately|approx|about|around|with|using|use)\b/gi, " ")
+    .replace(/[•]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,;:]+$/g, "")
+    .trim();
+
+  if (!cleaned || cleaned.length < 3 || cleaned.length > 80) {
+    return null;
+  }
+
+  if (!/[a-z]/i.test(cleaned) || /https?:\/\//i.test(cleaned)) {
+    return null;
+  }
+
+  if (cleaned.split(" ").length > 8 || invalidFilamentTokens.has(cleaned.toLowerCase())) {
+    return null;
+  }
+
+  cleaned = cleaned.replace(/\b(pla|petg|abs|asa|tpu)\b/gi, (material) => material.toUpperCase());
+
+  const materialType = cleaned.match(detectedFilamentMaterialPattern)?.[1]?.toUpperCase() ?? "PLA";
+  const colorLabel =
+    cleaned
+      .replace(/\b(PLA|PETG|ABS|ASA|TPU)\b/g, " ")
+      .replace(/\bfilament\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim() || cleaned;
+
+  const nameLookupKey = normalizeFilamentLookupKey(cleaned);
+  const colorLookupKey = normalizeFilamentLookupKey(colorLabel);
+  const combinedLookupKey = normalizeFilamentLookupKey(`${cleaned} ${colorLabel}`);
+
+  if (!nameLookupKey || !colorLookupKey) {
+    return null;
+  }
+
+  return {
+    name: cleaned,
+    colorLabel,
+    materialType,
+    nameLookupKey,
+    colorLookupKey,
+    combinedLookupKey,
+  };
+}
+
+function extractAutoCreateFilamentCandidates(sourceText: string) {
+  const candidates: AutoCreateFilamentCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const line of sourceText.split(/\r?\n/)) {
+    const value = extractFilamentLineValue(line);
+    if (!value) {
+      continue;
+    }
+
+    const segments = value
+      .split(/,|;|\/|\||\+|\band\b/gi)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    for (const segment of segments) {
+      const candidate = toAutoCreateFilamentCandidate(segment);
+      if (!candidate || seen.has(candidate.nameLookupKey)) {
+        continue;
+      }
+
+      seen.add(candidate.nameLookupKey);
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
+}
+
 export async function getAdminProducts(search?: string) {
   return prisma.product.findMany({
     where: search
@@ -329,6 +454,7 @@ export async function addFilamentRequirement(input: {
 export async function guessAndApplyFilamentRequirements(input: {
   productId: string;
   sourceText?: string;
+  createMissingFilaments?: boolean;
 }) {
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -366,11 +492,81 @@ export async function guessAndApplyFilamentRequirements(input: {
       .join("\n");
 
   const guessedMatches = await guessFilamentsFromText(sourceText, { includeInactive: false, limit: 24 });
-  if (guessedMatches.length === 0) {
+  const targetFilamentIds = new Set(guessedMatches.map((match) => match.filamentId));
+  let createdFilamentCount = 0;
+  let autoDetectedFilamentCount = 0;
+
+  if (input.createMissingFilaments) {
+    const autoCreateCandidates = extractAutoCreateFilamentCandidates(sourceText);
+    autoDetectedFilamentCount = autoCreateCandidates.length;
+
+    if (autoCreateCandidates.length > 0) {
+      const knownFilaments = await prisma.filament.findMany({
+        select: {
+          id: true,
+          name: true,
+          colorLabel: true,
+        },
+        orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+      });
+
+      const filamentIdByLookupKey = new Map<string, string>();
+      const registerFilament = (filament: { id: string; name: string; colorLabel: string }) => {
+        for (const key of [
+          normalizeFilamentLookupKey(filament.name),
+          normalizeFilamentLookupKey(filament.colorLabel),
+          normalizeFilamentLookupKey(`${filament.name} ${filament.colorLabel}`),
+        ]) {
+          if (key && !filamentIdByLookupKey.has(key)) {
+            filamentIdByLookupKey.set(key, filament.id);
+          }
+        }
+      };
+
+      for (const filament of knownFilaments) {
+        registerFilament(filament);
+      }
+
+      for (const candidate of autoCreateCandidates) {
+        const existingFilamentId =
+          filamentIdByLookupKey.get(candidate.nameLookupKey) ??
+          filamentIdByLookupKey.get(candidate.colorLookupKey) ??
+          filamentIdByLookupKey.get(candidate.combinedLookupKey);
+
+        if (existingFilamentId) {
+          targetFilamentIds.add(existingFilamentId);
+          continue;
+        }
+
+        const createdFilament = await prisma.filament.create({
+          data: {
+            name: candidate.name,
+            colorLabel: candidate.colorLabel,
+            materialType: candidate.materialType,
+            isActive: true,
+            notes: "Auto-created from Thangs import filament metadata. Review and update if needed.",
+          },
+          select: {
+            id: true,
+            name: true,
+            colorLabel: true,
+          },
+        });
+
+        registerFilament(createdFilament);
+        targetFilamentIds.add(createdFilament.id);
+        createdFilamentCount += 1;
+      }
+    }
+  }
+
+  if (targetFilamentIds.size === 0) {
     return {
-      matchedCount: 0,
+      matchedCount: guessedMatches.length,
       addedCount: 0,
       alreadyAssignedCount: 0,
+      createdFilamentCount,
+      autoDetectedFilamentCount,
       matches: guessedMatches,
     };
   }
@@ -383,8 +579,8 @@ export async function guessAndApplyFilamentRequirements(input: {
   let addedCount = 0;
   let alreadyAssignedCount = 0;
 
-  for (const match of guessedMatches) {
-    if (existingFilamentIds.has(match.filamentId)) {
+  for (const filamentId of targetFilamentIds) {
+    if (existingFilamentIds.has(filamentId)) {
       alreadyAssignedCount += 1;
       continue;
     }
@@ -393,11 +589,11 @@ export async function guessAndApplyFilamentRequirements(input: {
       await prisma.productFilamentRequirement.create({
         data: {
           productId: product.id,
-          filamentId: match.filamentId,
+          filamentId,
           sortOrder: currentCount + addedCount,
         },
       });
-      existingFilamentIds.add(match.filamentId);
+      existingFilamentIds.add(filamentId);
       addedCount += 1;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -412,6 +608,8 @@ export async function guessAndApplyFilamentRequirements(input: {
     matchedCount: guessedMatches.length,
     addedCount,
     alreadyAssignedCount,
+    createdFilamentCount,
+    autoDetectedFilamentCount,
     matches: guessedMatches,
   };
 }
@@ -501,5 +699,39 @@ export async function deleteProduct(productId: string, options?: { force?: boole
     deletedImagePaths: product.images.map((image) => image.imagePath),
     deletedQueueCount,
     deletedRequestCount,
+  };
+}
+
+export async function deleteAllProducts() {
+  const products = await prisma.product.findMany({
+    select: {
+      images: {
+        select: {
+          imagePath: true,
+        },
+      },
+    },
+  });
+
+  let deletedQueueCount = 0;
+  let deletedRequestCount = 0;
+  let deletedProductCount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const deletedQueue = await tx.queueItem.deleteMany({});
+    deletedQueueCount = deletedQueue.count;
+
+    const deletedRequests = await tx.request.deleteMany({});
+    deletedRequestCount = deletedRequests.count;
+
+    const deletedProducts = await tx.product.deleteMany({});
+    deletedProductCount = deletedProducts.count;
+  });
+
+  return {
+    deletedImagePaths: products.flatMap((product) => product.images.map((image) => image.imagePath)),
+    deletedQueueCount,
+    deletedRequestCount,
+    deletedProductCount,
   };
 }

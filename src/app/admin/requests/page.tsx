@@ -1,15 +1,16 @@
+import Image from "next/image";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/utils";
 import { humanizeEnum, requestStatusOptions } from "@/lib/domain";
 import {
-  convertRequestToQueueAction,
-  updateRequestByAdminAction,
+  bulkManageRequestsAction,
 } from "@/server/actions/portal-actions";
 import { getAllRequests } from "@/server/services/request-service";
 
@@ -19,6 +20,7 @@ export default async function AdminRequestsPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const [params, requests] = await Promise.all([searchParams, getAllRequests()]);
+  const redirectTo = "/admin/requests";
 
   return (
     <div className="space-y-4">
@@ -38,22 +40,92 @@ export default async function AdminRequestsPage({
         <CardHeader>
           <CardTitle>All Requests</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <form
+            id="bulk-request-management-form"
+            action={bulkManageRequestsAction}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.1fr)_220px_180px_minmax(0,1fr)_auto]"
+          >
+            <input type="hidden" name="redirectTo" value={redirectTo} />
+            <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
+              Bulk manage selected requests: update status and notes, convert to queue, or delete.
+            </p>
+            <Select name="operation" defaultValue="UPDATE">
+              <option value="UPDATE">Update status + notes</option>
+              <option value="CONVERT_TO_QUEUE">Convert to queue</option>
+              <option value="DELETE">Delete requests</option>
+            </Select>
+            <Select name="status" defaultValue="UNDER_REVIEW">
+              {requestStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {humanizeEnum(status)}
+                </option>
+              ))}
+            </Select>
+            <Textarea
+              name="adminNotes"
+              defaultValue=""
+              placeholder="Admin notes (used for update action)"
+              className="min-h-[42px]"
+            />
+            <Button type="submit">Apply to Selected</Button>
+          </form>
+
           <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-2 py-2">
+                    <div className="flex items-center gap-2">
+                      <SelectAllFormCheckbox
+                        formId="bulk-request-management-form"
+                        inputName="requestIds"
+                        totalCount={requests.length}
+                        ariaLabel="Select all requests"
+                      />
+                      <span className="sr-only">Select</span>
+                    </div>
+                  </th>
+                  <th className="px-2 py-2">Thumb</th>
                   <th className="px-2 py-2">Requester</th>
                   <th className="px-2 py-2">Product</th>
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Request Notes</th>
+                  <th className="px-2 py-2">Admin Notes</th>
+                  <th className="px-2 py-2">Queue Links</th>
                   <th className="px-2 py-2">Submitted</th>
-                  <th className="px-2 py-2">Admin Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((request) => (
                   <tr key={request.id} className="border-b border-slate-100 align-top">
+                    <td className="px-2 py-3">
+                      <input
+                        type="checkbox"
+                        name="requestIds"
+                        value={request.id}
+                        form="bulk-request-management-form"
+                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        aria-label={`Select request from ${request.requesterUser.name}`}
+                      />
+                    </td>
+                    <td className="px-2 py-3">
+                      {request.product.images[0] ? (
+                        <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                          <Image
+                            src={request.product.images[0].imagePath}
+                            alt={request.product.publicName}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">
+                          No Image
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-3 text-sm text-slate-700">
                       <p className="font-medium text-slate-900">{request.requesterUser.name}</p>
                       <p className="text-xs text-slate-500">{request.requesterUser.email}</p>
@@ -63,29 +135,26 @@ export default async function AdminRequestsPage({
                     <td className="px-2 py-3">
                       <StatusBadge value={request.status} />
                     </td>
-                    <td className="px-2 py-3 text-xs text-slate-500">{formatDateTime(request.createdAt)}</td>
-                    <td className="px-2 py-3">
-                      <form action={updateRequestByAdminAction} className="grid gap-2">
-                        <input type="hidden" name="requestId" value={request.id} />
-                        <input type="hidden" name="redirectTo" value="/admin/requests" />
-                        <Select name="status" defaultValue={request.status}>
-                          {requestStatusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {humanizeEnum(status)}
-                            </option>
-                          ))}
-                        </Select>
-                        <Textarea name="adminNotes" defaultValue={request.adminNotes ?? ""} placeholder="Admin notes" />
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="submit" variant="secondary" size="sm">
-                            Save
-                          </Button>
-                          <Button type="submit" formAction={convertRequestToQueueAction} size="sm">
-                            Convert to Queue
-                          </Button>
-                        </div>
-                      </form>
+                    <td className="max-w-xs px-2 py-3 text-xs text-slate-600">
+                      {request.notes ? (
+                        <p className="whitespace-pre-wrap break-words">{request.notes}</p>
+                      ) : (
+                        <span className="text-slate-400">None</span>
+                      )}
                     </td>
+                    <td className="max-w-xs px-2 py-3 text-xs text-slate-600">
+                      {request.adminNotes ? (
+                        <p className="whitespace-pre-wrap break-words">{request.adminNotes}</p>
+                      ) : (
+                        <span className="text-slate-400">None</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 text-xs text-slate-600">
+                      {request.queueItems.length > 0
+                        ? `${request.queueItems.length} linked item${request.queueItems.length === 1 ? "" : "s"}`
+                        : "None"}
+                    </td>
+                    <td className="px-2 py-3 text-xs text-slate-500">{formatDateTime(request.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -133,6 +133,23 @@ export const requestAdminUpdateSchema = z.object({
   adminNotes: z.string().trim().max(1000).optional(),
 });
 
+export const requestBulkActionSchema = z
+  .object({
+    requestIds: z.array(z.string().trim().min(1)).min(1, "Select at least one request."),
+    operation: z.enum(["UPDATE", "CONVERT_TO_QUEUE", "DELETE"]),
+    status: z.nativeEnum(RequestStatus).optional(),
+    adminNotes: z.string().trim().max(1000).optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.operation === "UPDATE" && !value.status) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["status"],
+        message: "Select a status for bulk updates.",
+      });
+    }
+  });
+
 export const queueCreateSchema = z.object({
   productId: z.string().trim().min(1),
   sourceType: z.nativeEnum(QueueSourceType),

@@ -25,6 +25,9 @@ import { simulateMarketplaceEvent } from "@/server/services/marketplace-event-se
 import { updateInventory } from "@/server/services/inventory-service";
 import { createQueueItem, updateQueueItem } from "@/server/services/queue-service";
 import {
+  bulkConvertRequestsToQueue,
+  bulkDeleteRequestsByAdmin,
+  bulkUpdateRequestsByAdmin,
   convertRequestToQueue,
   createRequestForUser,
   deleteSubmittedRequestForUser,
@@ -41,6 +44,7 @@ import {
   addFilamentRequirement,
   bulkUpdateProductControls,
   createProduct,
+  deleteAllProducts,
   deleteProduct,
   deleteProductImage,
   guessAndApplyFilamentRequirements,
@@ -66,6 +70,7 @@ import {
   queueCreateSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
+  requestBulkActionSchema,
   requestCreateSchema,
   requestUserUpdateSchema,
   settingsSchema,
@@ -734,6 +739,87 @@ export async function updateRequestByAdminAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", "Request updated."));
 }
 
+export async function bulkManageRequestsAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/requests");
+  const parsed = requestBulkActionSchema.safeParse({
+    requestIds: formData.getAll("requestIds").map((value) => String(value)),
+    operation: formData.get("operation"),
+    status: formData.get("status") || undefined,
+    adminNotes: formData.get("adminNotes") || undefined,
+  });
+
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  if (parsed.data.operation === "UPDATE") {
+    if (!parsed.data.status) {
+      redirect(appendStatus(redirectTo, "error", "Select a status for bulk updates."));
+    }
+
+    const updatedRequests = await bulkUpdateRequestsByAdmin({
+      requestIds: parsed.data.requestIds,
+      status: parsed.data.status,
+      adminNotes: parsed.data.adminNotes,
+    });
+
+    revalidatePath("/admin/requests");
+    revalidatePath("/requests");
+    revalidatePath("/my-requests");
+    redirect(
+      appendStatus(
+        redirectTo,
+        "success",
+        `${updatedRequests} request${updatedRequests === 1 ? "" : "s"} updated.`,
+      ),
+    );
+  }
+
+  if (parsed.data.operation === "CONVERT_TO_QUEUE") {
+    const result = await bulkConvertRequestsToQueue(parsed.data.requestIds);
+
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin/queue");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/requests");
+    revalidatePath("/my-requests");
+
+    const message = `Converted ${result.convertedCount} request${result.convertedCount === 1 ? "" : "s"} to queue.${
+      result.skippedAlreadyQueuedCount > 0
+        ? ` ${result.skippedAlreadyQueuedCount} already queued and skipped.`
+        : ""
+    }${result.skippedNotFoundCount > 0 ? ` ${result.skippedNotFoundCount} not found.` : ""}`;
+
+    redirect(
+      appendStatus(
+        redirectTo,
+        result.skippedAlreadyQueuedCount > 0 || result.skippedNotFoundCount > 0 ? "error" : "success",
+        message,
+      ),
+    );
+  }
+
+  const result = await bulkDeleteRequestsByAdmin(parsed.data.requestIds);
+  revalidatePath("/admin/requests");
+  revalidatePath("/requests");
+  revalidatePath("/my-requests");
+
+  const message = `Deleted ${result.deletedCount} request${result.deletedCount === 1 ? "" : "s"}.${
+    result.blockedCount > 0
+      ? ` ${result.blockedCount} linked to queue items and not deleted.`
+      : ""
+  }${result.notFoundCount > 0 ? ` ${result.notFoundCount} not found.` : ""}`;
+  redirect(
+    appendStatus(
+      redirectTo,
+      result.blockedCount > 0 || result.notFoundCount > 0 ? "error" : "success",
+      message,
+    ),
+  );
+}
+
 export async function convertRequestToQueueAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -744,7 +830,13 @@ export async function convertRequestToQueueAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", "Request id is required."));
   }
 
-  await convertRequestToQueue(requestId);
+  try {
+    await convertRequestToQueue(requestId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to convert request to queue.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
   revalidatePath("/admin/requests");
   revalidatePath("/admin/queue");
   revalidatePath("/admin/inventory");
@@ -815,6 +907,45 @@ export async function updateSettingsAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
+}
+
+export async function deleteAllProductsAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const confirmWord = String(formData.get("confirmWord") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (confirmWord !== "delete") {
+    redirect(appendStatus(redirectTo, "error", "Type \"delete\" to confirm bulk deletion."));
+  }
+
+  try {
+    const { deletedImagePaths, deletedProductCount, deletedQueueCount, deletedRequestCount } = await deleteAllProducts();
+    await Promise.all(
+      deletedImagePaths.map((imagePath) => localProductImageStorage.deleteProductImage(imagePath)),
+    );
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/queue");
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/admin/listings");
+    revalidatePath("/catalog");
+
+    if (deletedProductCount === 0) {
+      redirect(appendStatus(redirectTo, "success", "No products found to delete."));
+    }
+
+    const message = `Deleted ${deletedProductCount} product${deletedProductCount === 1 ? "" : "s"}, ${deletedQueueCount} queue item${deletedQueueCount === 1 ? "" : "s"}, and ${deletedRequestCount} request${deletedRequestCount === 1 ? "" : "s"}.`;
+    redirect(appendStatus(redirectTo, "success", message));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete all products.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
 }
 
 export async function updateMyMiniFactoryCredentialsAction(formData: FormData) {
