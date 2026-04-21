@@ -4,10 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StatusBadge } from "@/components/ui/badge";
+import { RequestPrintModalButton } from "@/components/catalog/request-print-modal-button";
 import { getPublicCatalogStats } from "@/server/services/dashboard-service";
 import { getPublicProducts } from "@/server/services/product-service";
 import { getDefaultMarketplace } from "@/server/services/settings-service";
+import { getSessionUser } from "@/server/auth/mock-auth-provider";
+import { getRequestSummariesForUserByProductIds } from "@/server/services/request-service";
 import { humanizeEnum } from "@/lib/domain";
 
 export default async function CatalogPage({
@@ -18,11 +20,20 @@ export default async function CatalogPage({
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
 
-  const [products, stats, defaultMarketplace] = await Promise.all([
+  const [products, stats, defaultMarketplace, user] = await Promise.all([
     getPublicProducts(q || undefined),
     getPublicCatalogStats(),
     getDefaultMarketplace(),
+    getSessionUser(),
   ]);
+  const requestSummaryByProduct = user
+    ? await getRequestSummariesForUserByProductIds(
+        user.id,
+        products.map((product) => product.id),
+      )
+    : new Map();
+  const canSubmitRequest = user?.role === "REQUEST_USER" || user?.role === "ADMIN";
+  const redirectTo = q ? `/catalog?${new URLSearchParams({ q }).toString()}` : "/catalog";
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -53,45 +64,67 @@ export default async function CatalogPage({
       {products.length === 0 ? (
         <EmptyState title="No products found" description="Try a different search term or clear filters." />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => {
             const primaryImage = product.images[0]?.imagePath ?? "/seed-images/geometric-planter-1.svg";
             const defaultListing = product.listings.find(
               (listing) => listing.marketplaceType === defaultMarketplace && listing.externalUrl,
             );
+            const requestSummary = requestSummaryByProduct.get(product.id);
+            const requestStatusSummary = requestSummary
+              ? `${requestSummary.totalQuantity}x${requestSummary.requestCount > 1 ? ` • ${requestSummary.requestCount} reqs` : ""} • ${humanizeEnum(requestSummary.latestStatus)}`
+              : null;
 
             return (
-              <Card key={product.id} className="overflow-hidden">
-                <div className="relative h-48 w-full bg-slate-100">
-                  <Image src={primaryImage} alt={product.publicName} fill className="object-cover" />
-                </div>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle>{product.publicName}</CardTitle>
-                    <StatusBadge value={product.status} />
+              <Card key={product.id} className="flex h-full flex-col overflow-hidden">
+                <Link href={`/catalog/${product.slug}`} aria-label={`View details for ${product.publicName}`} className="block">
+                  <div className="relative aspect-[5/4] w-full bg-slate-100">
+                    <Image src={primaryImage} alt={product.publicName} fill className="object-cover" />
                   </div>
-                  <CardDescription>{product.shortDescription}</CardDescription>
+                </Link>
+                <CardHeader className="flex-1">
+                  <CardTitle>{product.publicName}</CardTitle>
+                  <CardDescription
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {product.shortDescription}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-xs text-slate-500">Category: {product.category}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {defaultListing ? (
-                      <a href={defaultListing.externalUrl ?? "#"} target="_blank" rel="noreferrer">
-                        <Button size="sm">Buy</Button>
-                      </a>
-                    ) : null}
-                    {product.isRequestable ? (
-                      <Link href={`/catalog/${product.slug}`}>
-                        <Button size="sm" variant="secondary">
-                          Request
-                        </Button>
-                      </Link>
-                    ) : null}
+                  <div className="flex items-center gap-2">
                     <Link href={`/catalog/${product.slug}`}>
                       <Button size="sm" variant="ghost">
                         View
                       </Button>
                     </Link>
+                    {defaultListing ? (
+                      <a href={defaultListing.externalUrl ?? "#"} target="_blank" rel="noreferrer">
+                        <Button size="sm">Buy</Button>
+                      </a>
+                    ) : null}
+                    {requestStatusSummary ? (
+                      <span className="ml-auto max-w-[52%] truncate text-[11px] font-medium text-sky-700" title={requestStatusSummary}>
+                        {requestStatusSummary}
+                      </span>
+                    ) : null}
+                    {product.isRequestable ? (
+                      <RequestPrintModalButton
+                        productId={product.id}
+                        productName={product.publicName}
+                        productSlug={product.slug}
+                        redirectTo={redirectTo}
+                        canSubmitRequest={canSubmitRequest}
+                        buttonLabel={requestSummary ? "Requested" : "Request"}
+                        buttonVariant={requestSummary ? "success" : "secondary"}
+                        buttonClassName={requestSummary ? undefined : "ml-auto"}
+                      />
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>

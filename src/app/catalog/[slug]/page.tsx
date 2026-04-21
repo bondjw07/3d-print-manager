@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { StatusBadge } from "@/components/ui/badge";
 import { humanizeEnum } from "@/lib/domain";
 import { formatCurrency } from "@/lib/utils";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
@@ -80,10 +79,7 @@ export default async function ProductDetailPage({
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle>{product.publicName}</CardTitle>
-              <StatusBadge value={product.status} />
-            </div>
+            <CardTitle>{product.publicName}</CardTitle>
             <CardDescription>{product.shortDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -128,7 +124,7 @@ export default async function ProductDetailPage({
           <CardHeader>
             <CardTitle>Submit a Print Request</CardTitle>
             <CardDescription>
-              Requests are available to signed-in request users. Admin users manage review and queueing.
+              Requests are available to signed-in request users and admins.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -141,7 +137,7 @@ export default async function ProductDetailPage({
               </p>
             ) : null}
 
-            {user?.role === "REQUEST_USER" ? (
+            {user?.role === "REQUEST_USER" || user?.role === "ADMIN" ? (
               <form action={submitRequestAction} className="grid gap-3 sm:max-w-xl">
                 <input type="hidden" name="redirectTo" value={`/catalog/${product.slug}`} />
                 <input type="hidden" name="productId" value={product.id} />
@@ -163,7 +159,7 @@ export default async function ProductDetailPage({
               </form>
             ) : (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-800">
-                <p>Sign in as a request user to submit this request.</p>
+                <p>Sign in as a request user or admin to submit this request.</p>
                 <Link href="/login" className="mt-2 inline-block font-medium text-sky-900 underline">
                   Go to sign in
                 </Link>

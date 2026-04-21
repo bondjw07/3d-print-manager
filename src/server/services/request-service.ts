@@ -2,6 +2,14 @@ import { QueuePriority, QueueSourceType, QueueStatus, RequestStatus } from "@/ge
 import { prisma } from "@/lib/prisma";
 import { recalculateInventoryAvailable } from "./inventory-service";
 
+export type ProductRequestSummary = {
+  productId: string;
+  requestCount: number;
+  totalQuantity: number;
+  latestStatus: RequestStatus;
+  latestRequestedAt: Date;
+};
+
 export async function getRequestsForUser(userId: string) {
   return prisma.request.findMany({
     where: { requesterUserId: userId },
@@ -18,6 +26,51 @@ export async function getRequestsForUser(userId: string) {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function getRequestSummariesForUserByProductIds(userId: string, productIds: string[]) {
+  if (productIds.length === 0) {
+    return new Map<string, ProductRequestSummary>();
+  }
+
+  const requests = await prisma.request.findMany({
+    where: {
+      requesterUserId: userId,
+      productId: { in: productIds },
+    },
+    select: {
+      productId: true,
+      quantity: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  const summaries = new Map<string, ProductRequestSummary>();
+
+  for (const request of requests) {
+    const existing = summaries.get(request.productId);
+
+    if (!existing) {
+      summaries.set(request.productId, {
+        productId: request.productId,
+        requestCount: 1,
+        totalQuantity: request.quantity,
+        latestStatus: request.status,
+        latestRequestedAt: request.createdAt,
+      });
+      continue;
+    }
+
+    summaries.set(request.productId, {
+      ...existing,
+      requestCount: existing.requestCount + 1,
+      totalQuantity: existing.totalQuantity + request.quantity,
+    });
+  }
+
+  return summaries;
 }
 
 export async function getAllRequests() {

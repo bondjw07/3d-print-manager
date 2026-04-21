@@ -598,7 +598,7 @@ export async function runListingActionAction(formData: FormData) {
 }
 
 export async function submitRequestAction(formData: FormData) {
-  const user = await requireRole("REQUEST_USER");
+  const user = await requireRole(["REQUEST_USER", "ADMIN"]);
 
   const redirectTo = String(formData.get("redirectTo") ?? "/my-requests");
   const parsed = requestCreateSchema.safeParse(Object.fromEntries(formData));
