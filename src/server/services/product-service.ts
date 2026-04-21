@@ -42,6 +42,9 @@ const filamentLineValuePatterns = [
   /\bfilaments?\b(?:\s+(?:used|use|required|requirements?|types?|colors?))?\s*[:\-]\s*(.+)$/i,
   /\bfilaments?\b(?:\s+(?:used|use|required|requirements?|types?|colors?))?\s+(?:are|is)\s+(.+)$/i,
 ];
+const markdownLinkPattern = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi;
+const filamentLinkHintPattern = /\b(pla|petg|abs|asa|tpu|filament|matte|silk|metallic|panchroma)\b/i;
+const nonFilamentLinkLabelPattern = /\b(website|shop|discord|community|download|instructions?|photos?)\b/i;
 const invalidFilamentTokens = new Set(["none", "n/a", "na", "unknown", "various", "multiple"]);
 
 type AutoCreateFilamentCandidate = {
@@ -136,6 +139,15 @@ function toAutoCreateFilamentCandidate(rawValue: string): AutoCreateFilamentCand
 function extractAutoCreateFilamentCandidates(sourceText: string) {
   const candidates: AutoCreateFilamentCandidate[] = [];
   const seen = new Set<string>();
+  const pushCandidate = (rawValue: string) => {
+    const candidate = toAutoCreateFilamentCandidate(rawValue);
+    if (!candidate || seen.has(candidate.nameLookupKey)) {
+      return;
+    }
+
+    seen.add(candidate.nameLookupKey);
+    candidates.push(candidate);
+  };
 
   for (const line of sourceText.split(/\r?\n/)) {
     const value = extractFilamentLineValue(line);
@@ -149,14 +161,25 @@ function extractAutoCreateFilamentCandidates(sourceText: string) {
       .filter(Boolean);
 
     for (const segment of segments) {
-      const candidate = toAutoCreateFilamentCandidate(segment);
-      if (!candidate || seen.has(candidate.nameLookupKey)) {
-        continue;
-      }
-
-      seen.add(candidate.nameLookupKey);
-      candidates.push(candidate);
+      pushCandidate(segment);
     }
+  }
+
+  for (const match of sourceText.matchAll(markdownLinkPattern)) {
+    const linkLabel = match[1]?.trim();
+    if (!linkLabel) {
+      continue;
+    }
+
+    if (nonFilamentLinkLabelPattern.test(linkLabel)) {
+      continue;
+    }
+
+    if (!filamentLinkHintPattern.test(linkLabel)) {
+      continue;
+    }
+
+    pushCandidate(linkLabel);
   }
 
   return candidates;

@@ -75,3 +75,49 @@ export async function deactivateFilament(filamentId: string) {
     data: { isActive: false },
   });
 }
+
+export async function deleteFilament(filamentId: string, options?: { force?: boolean }) {
+  const filament = await prisma.filament.findUnique({
+    where: { id: filamentId },
+    select: {
+      id: true,
+      _count: {
+        select: {
+          productRequirements: true,
+        },
+      },
+    },
+  });
+
+  if (!filament) {
+    throw new Error("Filament not found.");
+  }
+
+  const linkedRequirementCount = filament._count.productRequirements;
+  const hasLinkedRequirements = linkedRequirementCount > 0;
+
+  if (hasLinkedRequirements && !options?.force) {
+    throw new Error(
+      `This filament is linked to ${linkedRequirementCount} product requirement(s). Type "delete" to remove linked requirements and delete the filament.`,
+    );
+  }
+
+  let removedRequirementCount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    if (hasLinkedRequirements) {
+      const removedRequirements = await tx.productFilamentRequirement.deleteMany({
+        where: { filamentId },
+      });
+      removedRequirementCount = removedRequirements.count;
+    }
+
+    await tx.filament.delete({
+      where: { id: filamentId },
+    });
+  });
+
+  return {
+    removedRequirementCount,
+  };
+}

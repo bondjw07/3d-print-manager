@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/mock-auth-provider";
 import {
   createFilament,
+  deleteFilament,
   deactivateFilament,
   updateFilament,
 } from "@/server/services/filament-service";
@@ -516,6 +517,39 @@ export async function deactivateFilamentAction(formData: FormData) {
   await deactivateFilament(filamentId);
   revalidatePath("/admin/filaments");
   redirect(appendStatus(redirectTo, "success", "Filament deactivated."));
+}
+
+export async function deleteFilamentAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const filamentId = String(formData.get("filamentId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/filaments");
+  const confirmWord = String(formData.get("confirmWord") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!filamentId) {
+    redirect(appendStatus(redirectTo, "error", "Filament id is required."));
+  }
+
+  try {
+    const { removedRequirementCount } = await deleteFilament(filamentId, {
+      force: confirmWord === "delete",
+    });
+
+    revalidatePath("/admin/filaments");
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/queue");
+
+    const linkedCleanupDetail =
+      removedRequirementCount > 0
+        ? ` Removed ${removedRequirementCount} linked product requirement${removedRequirementCount === 1 ? "" : "s"}.`
+        : "";
+    redirect(appendStatus(redirectTo, "success", `Filament deleted.${linkedCleanupDetail}`));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete filament.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
 }
 
 export async function createListingAction(formData: FormData) {

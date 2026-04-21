@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmSubmitModalButton } from "@/components/ui/confirm-submit-modal-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/utils";
-import { deactivateFilamentAction, updateFilamentAction } from "@/server/actions/portal-actions";
+import { deactivateFilamentAction, deleteFilamentAction, updateFilamentAction } from "@/server/actions/portal-actions";
 import { getFilamentById } from "@/server/services/filament-service";
 
 export default async function AdminFilamentDetailPage({
@@ -174,6 +175,43 @@ export default async function AdminFilamentDetailPage({
               </tbody>
             </Table>
           </TableContainer>
+        </CardContent>
+      </Card>
+
+      <Card className="border-rose-200">
+        <CardHeader>
+          <CardTitle className="text-rose-700">Danger Zone</CardTitle>
+          <CardDescription>Permanently delete this filament.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          {requirements.length > 0 ? (
+            <p className="text-sm text-rose-700">
+              This filament is linked to {requirements.length} product requirement{requirements.length === 1 ? "" : "s"}.
+              Deleting will remove those linked requirement records from products.
+            </p>
+          ) : (
+            <p className="text-sm text-rose-700">
+              Warning: this permanently deletes the filament and cannot be undone.
+            </p>
+          )}
+          <form action={deleteFilamentAction}>
+            <input type="hidden" name="filamentId" value={filament.id} />
+            <input type="hidden" name="redirectTo" value="/admin/filaments" />
+            <ConfirmSubmitModalButton
+              variant="danger"
+              confirmTitle={requirements.length > 0 ? "Delete Filament And Linked Requirements?" : "Delete Filament?"}
+              confirmMessage={
+                requirements.length > 0
+                  ? `Delete "${filament.name}" permanently and remove its ${requirements.length} linked product requirement${requirements.length === 1 ? "" : "s"}? This action cannot be undone.`
+                  : `Delete "${filament.name}" permanently? This action cannot be undone.`
+              }
+              confirmLabel="Yes, Delete"
+              confirmationKeyword={requirements.length > 0 ? "delete" : undefined}
+              confirmationInputName="confirmWord"
+            >
+              Delete Filament
+            </ConfirmSubmitModalButton>
+          </form>
         </CardContent>
       </Card>
     </div>
