@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export type ProductImportMode = "single" | "bulk" | "creator" | "creatorMmf";
 
-type ImportLogStatus = "imported" | "duplicate" | "failed" | "invalid" | "discovered";
+type ImportLogStatus = "imported" | "duplicate" | "failed" | "invalid" | "discovered" | "stopped";
 
 type ImportLogEntry = {
   url: string;
@@ -38,6 +38,8 @@ type ProductImportResponse = {
   };
 };
 
+const CREATOR_DISCOVERY_MAX_PAGES = 200;
+
 function splitUrls(raw: string) {
   return raw
     .split(/\r?\n|,|;/g)
@@ -48,7 +50,7 @@ function splitUrls(raw: string) {
 function statusBadgeClasses(status: ImportLogStatus) {
   if (status === "imported") return "bg-emerald-100 text-emerald-700";
   if (status === "duplicate") return "bg-sky-100 text-sky-700";
-  if (status === "discovered") return "bg-amber-100 text-amber-700";
+  if (status === "discovered" || status === "stopped") return "bg-amber-100 text-amber-700";
   return "bg-rose-100 text-rose-700";
 }
 
@@ -75,9 +77,15 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
   const [importedCount, setImportedCount] = useState(0);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  const [pendingCandidates, setPendingCandidates] = useState<string[] | null>(null);
+  const [isAwaitingImportConfirmation, setIsAwaitingImportConfirmation] = useState(false);
+  const [wasStopped, setWasStopped] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const isCreatorMode = mode === "creator" || mode === "creatorMmf";
   const isThangsCreatorMode = mode === "creator";
   const isMyMiniFactoryCreatorMode = mode === "creatorMmf";
+  const stopRequestedRef = useRef(false);
+  const importAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsModalOpen(false);
@@ -89,17 +97,26 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setImportedCount(0);
     setDuplicateCount(0);
     setFailedCount(0);
+    setPendingCandidates(null);
+    setIsAwaitingImportConfirmation(false);
+    setWasStopped(false);
+    setIsStopping(false);
+    stopRequestedRef.current = false;
+    importAbortControllerRef.current?.abort();
+    importAbortControllerRef.current = null;
   }, [mode]);
 
   const progressPercent = totalCount > 0 ? Math.round((processedCount / totalCount) * 100) : 0;
   const canStart =
     !isRunning &&
-    (mode === "single"
-      ? singleSourceUrl.trim().length > 0
-      : isCreatorMode
-        ? creatorUrl.trim().length > 0
-        : sourceUrls.trim().length > 0);
-  const finished = !isRunning && totalCount > 0 && processedCount === totalCount;
+    (isAwaitingImportConfirmation
+      ? (pendingCandidates?.length ?? 0) > 0
+      : mode === "single"
+        ? singleSourceUrl.trim().length > 0
+        : isCreatorMode
+          ? creatorUrl.trim().length > 0
+          : sourceUrls.trim().length > 0);
+  const hasSummaryOutput = !isRunning && totalCount > 0 && (processedCount === totalCount || wasStopped);
 
   const summaryText = useMemo(() => {
     if (totalCount === 0) {
@@ -115,8 +132,19 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
       return "Paste URLs to start a bulk import.";
     }
 
+    if (isAwaitingImportConfirmation) {
+      return `Discovered ${totalCount} URL${totalCount === 1 ? "" : "s"}. Review the result and click Start Import when ready.`;
+    }
+
     if (isRunning) {
+      if (isStopping) {
+        return `Stopping import after current request... ${processedCount} of ${totalCount} URLs processed.`;
+      }
       return `Processing ${processedCount} of ${totalCount} URLs...`;
+    }
+
+    if (wasStopped) {
+      return `Stopped after ${processedCount} of ${totalCount} URLs: ${importedCount} imported, ${duplicateCount} duplicates, ${failedCount} failed.`;
     }
 
     return `Completed ${totalCount} URLs: ${importedCount} imported, ${duplicateCount} duplicates, ${failedCount} failed.`;
@@ -124,15 +152,21 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     duplicateCount,
     failedCount,
     importedCount,
+    isAwaitingImportConfirmation,
     isMyMiniFactoryCreatorMode,
     isRunning,
+    isStopping,
     isThangsCreatorMode,
     mode,
     processedCount,
     totalCount,
+    wasStopped,
   ]);
 
   const resetStateForRun = (count: number) => {
+    stopRequestedRef.current = false;
+    importAbortControllerRef.current?.abort();
+    importAbortControllerRef.current = null;
     setLogs([]);
     setProcessedCount(0);
     setImportedCount(0);
@@ -140,88 +174,36 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setFailedCount(0);
     setTotalCount(count);
     setCurrentUrl(null);
+    setPendingCandidates(null);
+    setIsAwaitingImportConfirmation(false);
+    setWasStopped(false);
+    setIsStopping(false);
   };
 
   const appendLog = (entry: ImportLogEntry) => {
     setLogs((previous) => [entry, ...previous]);
   };
 
-  const runBulkImport = async () => {
-    setIsModalOpen(true);
+  const importCandidates = async (candidates: string[], shouldImportImages: boolean) => {
+    setPendingCandidates(null);
+    setIsAwaitingImportConfirmation(false);
+    setWasStopped(false);
+    setIsStopping(false);
     setIsRunning(true);
-    resetStateForRun(0);
+    setTotalCount(candidates.length);
+    stopRequestedRef.current = false;
 
-    const shouldImportImages = importImages === "true";
-    let candidates: string[] = [];
+    let didStop = false;
+    let lastUrl: string | null = null;
 
     try {
-      if (mode === "single") {
-        candidates = Array.from(new Set(splitUrls(singleSourceUrl)));
-      } else if (mode === "bulk") {
-        candidates = Array.from(new Set(splitUrls(sourceUrls)));
-      } else if (isCreatorMode) {
-        const parsedMaxPages = Number.parseInt(creatorMaxPages, 10);
-        const maxPages = Number.isFinite(parsedMaxPages) ? Math.min(40, Math.max(1, parsedMaxPages)) : 12;
-        const creatorInput = creatorUrl.trim();
-
-        if (!creatorInput) {
-          appendLog({
-            url: "-",
-            status: "invalid",
-            message: isThangsCreatorMode
-              ? "Paste a Thangs creator URL first."
-              : "Paste a MyMiniFactory creator username or profile URL first.",
-          });
-          setFailedCount(1);
-          return;
-        }
-
-        setCurrentUrl(creatorInput);
-        const discoveryEndpoint = isThangsCreatorMode
-          ? "/api/admin/discover-thangs-creator"
-          : "/api/admin/discover-myminifactory-creator";
-        const discoveryRequestBody = isThangsCreatorMode
-          ? { creatorUrl: creatorInput, maxPages }
-          : { creator: creatorInput, maxPages };
-
-        const discoveryResponse = await fetch(discoveryEndpoint, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(discoveryRequestBody),
-        });
-
-        const discoveryPayload = (await discoveryResponse.json().catch(() => ({}))) as CreatorDiscoveryResponse;
-        if (!discoveryResponse.ok || !discoveryPayload.result) {
-          throw new Error(discoveryPayload.error || `Creator discovery failed (${discoveryResponse.status}).`);
-        }
-
-        candidates = Array.from(new Set(discoveryPayload.result.modelUrls));
-        setTotalCount(candidates.length);
-        appendLog({
-          url: discoveryPayload.result.creatorUrl,
-          status: "discovered",
-          message: `Discovered ${discoveryPayload.result.discoveredCount} model URL${discoveryPayload.result.discoveredCount === 1 ? "" : "s"} across ${discoveryPayload.result.pagesScanned} page${discoveryPayload.result.pagesScanned === 1 ? "" : "s"}${discoveryPayload.result.creatorName ? ` for ${discoveryPayload.result.creatorName}` : ""}.`,
-        });
-      }
-
-      if (candidates.length === 0) {
-        appendLog({
-          url: "-",
-          status: "invalid",
-          message:
-            isCreatorMode
-              ? "No model URLs were discovered for this creator."
-              : "Paste at least one valid URL.",
-        });
-        setFailedCount((value) => value + 1);
-        return;
-      }
-
-      setTotalCount(candidates.length);
-
       for (const rawUrl of candidates) {
-        let normalizedUrl = rawUrl;
+        if (stopRequestedRef.current) {
+          didStop = true;
+          break;
+        }
 
+        let normalizedUrl = rawUrl;
         try {
           normalizedUrl = new URL(rawUrl).toString();
         } catch {
@@ -235,9 +217,14 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
           continue;
         }
 
+        lastUrl = normalizedUrl;
         setCurrentUrl(normalizedUrl);
+        let shouldIncrementProcessed = true;
 
         try {
+          const abortController = new AbortController();
+          importAbortControllerRef.current = abortController;
+
           const response = await fetch("/api/admin/import-product", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -245,6 +232,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
               sourceUrl: normalizedUrl,
               importImages: shouldImportImages,
             }),
+            signal: abortController.signal,
           });
 
           const payload = (await response.json().catch(() => ({}))) as ProductImportResponse;
@@ -269,6 +257,15 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
             });
           }
         } catch (error) {
+          const wasAbortFromStop =
+            stopRequestedRef.current && error instanceof DOMException && error.name === "AbortError";
+
+          if (wasAbortFromStop) {
+            shouldIncrementProcessed = false;
+            didStop = true;
+            break;
+          }
+
           const message = error instanceof Error ? error.message : "Import failed.";
           setFailedCount((value) => value + 1);
           appendLog({
@@ -277,9 +274,134 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
             message,
           });
         } finally {
-          setProcessedCount((value) => value + 1);
+          importAbortControllerRef.current = null;
+          if (shouldIncrementProcessed) {
+            setProcessedCount((value) => value + 1);
+          }
         }
       }
+
+      if (didStop || stopRequestedRef.current) {
+        setWasStopped(true);
+        appendLog({
+          url: lastUrl ?? "-",
+          status: "stopped",
+          message: "Import stopped. Summary reflects processed items so far.",
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Import failed.";
+      setFailedCount((value) => value + 1);
+      appendLog({
+        url: lastUrl ?? "-",
+        status: "failed",
+        message,
+      });
+    } finally {
+      stopRequestedRef.current = false;
+      importAbortControllerRef.current = null;
+      setCurrentUrl(null);
+      setIsStopping(false);
+      setIsRunning(false);
+      router.refresh();
+    }
+  };
+
+  const runBulkImport = async () => {
+    setIsModalOpen(true);
+    const shouldImportImages = importImages === "true";
+
+    if (isCreatorMode && isAwaitingImportConfirmation && pendingCandidates?.length) {
+      await importCandidates(pendingCandidates, shouldImportImages);
+      return;
+    }
+
+    resetStateForRun(0);
+    setIsRunning(true);
+    let candidates: string[] = [];
+
+    try {
+      if (mode === "single") {
+        candidates = Array.from(new Set(splitUrls(singleSourceUrl)));
+      } else if (mode === "bulk") {
+        candidates = Array.from(new Set(splitUrls(sourceUrls)));
+      } else if (isCreatorMode) {
+        const parsedMaxPages = Number.parseInt(creatorMaxPages, 10);
+        const maxPages = Number.isFinite(parsedMaxPages)
+          ? Math.min(CREATOR_DISCOVERY_MAX_PAGES, Math.max(1, parsedMaxPages))
+          : 12;
+        const creatorInput = creatorUrl.trim();
+
+        if (!creatorInput) {
+          appendLog({
+            url: "-",
+            status: "invalid",
+            message: isThangsCreatorMode
+              ? "Paste a Thangs creator URL first."
+              : "Paste a MyMiniFactory creator username or profile URL first.",
+          });
+          setFailedCount(1);
+          setIsRunning(false);
+          return;
+        }
+
+        setCurrentUrl(creatorInput);
+        const discoveryEndpoint = isThangsCreatorMode
+          ? "/api/admin/discover-thangs-creator"
+          : "/api/admin/discover-myminifactory-creator";
+        const discoveryRequestBody = isThangsCreatorMode
+          ? { creatorUrl: creatorInput, maxPages }
+          : { creator: creatorInput, maxPages };
+
+        const discoveryResponse = await fetch(discoveryEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(discoveryRequestBody),
+        });
+
+        const discoveryPayload = (await discoveryResponse.json().catch(() => ({}))) as CreatorDiscoveryResponse;
+        if (!discoveryResponse.ok || !discoveryPayload.result) {
+          throw new Error(discoveryPayload.error || `Creator discovery failed (${discoveryResponse.status}).`);
+        }
+
+        candidates = Array.from(new Set(discoveryPayload.result.modelUrls));
+        if (candidates.length === 0) {
+          appendLog({
+            url: discoveryPayload.result.creatorUrl,
+            status: "invalid",
+            message: "No model URLs were discovered for this creator.",
+          });
+          setFailedCount((value) => value + 1);
+          setIsRunning(false);
+          setCurrentUrl(null);
+          return;
+        }
+
+        setTotalCount(candidates.length);
+        setPendingCandidates(candidates);
+        setIsAwaitingImportConfirmation(true);
+        appendLog({
+          url: discoveryPayload.result.creatorUrl,
+          status: "discovered",
+          message: `Discovered ${discoveryPayload.result.discoveredCount} model URL${discoveryPayload.result.discoveredCount === 1 ? "" : "s"} across ${discoveryPayload.result.pagesScanned} page${discoveryPayload.result.pagesScanned === 1 ? "" : "s"}${discoveryPayload.result.creatorName ? ` for ${discoveryPayload.result.creatorName}` : ""}. Click Start Import to continue.`,
+        });
+        setIsRunning(false);
+        setCurrentUrl(null);
+        return;
+      }
+
+      if (candidates.length === 0) {
+        appendLog({
+          url: "-",
+          status: "invalid",
+          message: "Paste at least one valid URL.",
+        });
+        setFailedCount((value) => value + 1);
+        setIsRunning(false);
+        return;
+      }
+
+      await importCandidates(candidates, shouldImportImages);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Import failed.";
       setFailedCount((value) => value + 1);
@@ -288,11 +410,24 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
         status: "failed",
         message,
       });
-    } finally {
       setCurrentUrl(null);
       setIsRunning(false);
-      router.refresh();
     }
+  };
+
+  const requestStopImport = () => {
+    if (!isRunning || isStopping) {
+      return;
+    }
+
+    stopRequestedRef.current = true;
+    setIsStopping(true);
+    appendLog({
+      url: currentUrl ?? "-",
+      status: "stopped",
+      message: "Stop requested. Halting import...",
+    });
+    importAbortControllerRef.current?.abort();
   };
 
   const closeModal = () => {
@@ -375,7 +510,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
               name="maxPages"
               type="number"
               min={1}
-              max={40}
+              max={CREATOR_DISCOVERY_MAX_PAGES}
               value={creatorMaxPages}
               onChange={(event) => setCreatorMaxPages(event.target.value)}
               title="Maximum pages to scan"
@@ -389,13 +524,13 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
               <option value="false">Metadata only</option>
             </Select>
             <Button type="button" disabled={!canStart} onClick={runBulkImport}>
-              Import Creator
+              {isAwaitingImportConfirmation ? `Start Import (${totalCount})` : "Discover Creator Models"}
             </Button>
           </div>
           <p className="text-xs text-slate-500">
             {isThangsCreatorMode
-              ? "Scans creator pages one at a time, discovers model URLs, then imports each product sequentially."
-              : "Loads public objects from the MyMiniFactory creator API, then imports each product sequentially."}
+              ? "Discovery runs first and shows how many model URLs were found. Click Start Import to begin sequential imports."
+              : "Discovery runs first and shows how many public objects were found. Click Start Import to begin sequential imports."}
           </p>
         </div>
       ) : null}
@@ -419,9 +554,16 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
                 <h2 className="text-base font-semibold text-slate-900">{modalTitle}</h2>
                 <p className="mt-1 text-sm text-slate-600">{summaryText}</p>
               </div>
-              <Button type="button" variant="secondary" disabled={isRunning} onClick={closeModal}>
-                Close
-              </Button>
+              <div className="flex items-center gap-2">
+                {isRunning ? (
+                  <Button type="button" variant="danger" disabled={isStopping} onClick={requestStopImport}>
+                    {isStopping ? "Stopping..." : "Stop"}
+                  </Button>
+                ) : null}
+                <Button type="button" variant="secondary" disabled={isRunning} onClick={closeModal}>
+                  Close
+                </Button>
+              </div>
             </div>
 
             <div className="mt-4">
@@ -464,7 +606,11 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
                   {logs.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="px-3 py-4 text-slate-500">
-                        {isRunning ? `Starting ${importModeLabel(mode)} import...` : "No activity yet."}
+                        {isRunning
+                          ? `Starting ${importModeLabel(mode)} import...`
+                          : isAwaitingImportConfirmation
+                            ? "Discovery complete. Ready to start import."
+                            : "No activity yet."}
                       </td>
                     </tr>
                   ) : (
@@ -493,7 +639,7 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
               <p className="mt-3 text-xs text-slate-500">Currently importing: {currentUrl}</p>
             ) : null}
 
-            {finished ? (
+            {hasSummaryOutput ? (
               <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => router.refresh()}>
                   Refresh List
