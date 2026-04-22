@@ -48,8 +48,6 @@ export async function POST(request: Request) {
         wasDuplicate: result.wasDuplicate,
         importedImageCount: result.importedImageCount,
         skippedDuplicateImageCount: result.skippedDuplicateImageCount,
-        guessedFilamentCount: result.guessedFilamentCount,
-        addedFilamentRequirementCount: result.addedFilamentRequirementCount,
       },
     });
   } catch (error) {

@@ -129,7 +129,7 @@ export async function importProductFromUrlAction(formData: FormData) {
         : "";
     const message = result.wasDuplicate
       ? `${humanizeEnum(result.source)} already imported. Opened existing product; no duplicate was created.`
-      : `${humanizeEnum(result.source)} import completed with ${result.importedImageCount} image${result.importedImageCount === 1 ? "" : "s"}.${duplicateDetail} Filament guess: ${result.guessedFilamentCount} matched, ${result.addedFilamentRequirementCount} added.`;
+      : `${humanizeEnum(result.source)} import completed with ${result.importedImageCount} image${result.importedImageCount === 1 ? "" : "s"}.${duplicateDetail}`;
     redirect(appendStatus(`/admin/products/${result.product.id}`, "success", message));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Import failed.";
@@ -160,7 +160,7 @@ export async function refreshProductFromUrlAction(formData: FormData) {
     revalidatePath("/catalog");
     revalidatePath("/admin");
 
-    const message = `Updated from ${humanizeEnum(result.source)}: ${result.importedImageCount} new image${result.importedImageCount === 1 ? "" : "s"} imported, ${result.skippedDuplicateImageCount} duplicate${result.skippedDuplicateImageCount === 1 ? "" : "s"} skipped. Filament guess: ${result.guessedFilamentCount} matched, ${result.addedFilamentRequirementCount} added.`;
+    const message = `Updated from ${humanizeEnum(result.source)}: ${result.importedImageCount} new image${result.importedImageCount === 1 ? "" : "s"} imported, ${result.skippedDuplicateImageCount} duplicate${result.skippedDuplicateImageCount === 1 ? "" : "s"} skipped.`;
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Refresh failed.";

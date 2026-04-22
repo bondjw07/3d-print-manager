@@ -1,9 +1,8 @@
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { ProductImageStorage, SavedProductImage } from "./storage-service";
-
-const uploadsDir = path.join(process.cwd(), "public", "uploads", "products");
+import { productUploadsDir, resolveProductImageDiskPaths, toProductImagePath } from "./product-image-paths";
 
 export class LocalProductImageStorage implements ProductImageStorage {
   async saveProductImage(file: File): Promise<SavedProductImage> {
@@ -16,29 +15,32 @@ export class LocalProductImageStorage implements ProductImageStorage {
 
     const ext = this.extFromContentType(contentType);
     const fileName = `${randomUUID()}${ext}`;
+    const imagePath = toProductImagePath(fileName);
+    if (!imagePath) {
+      throw new Error("Unable to save image.");
+    }
 
-    await mkdir(uploadsDir, { recursive: true });
+    await mkdir(productUploadsDir, { recursive: true });
 
     const bytes = await file.arrayBuffer();
-    await writeFile(path.join(uploadsDir, fileName), Buffer.from(bytes));
+    const finalFilePath = path.join(productUploadsDir, fileName);
+    const tempFilePath = `${finalFilePath}.tmp-${randomUUID()}`;
+    await writeFile(tempFilePath, Buffer.from(bytes));
+    await rename(tempFilePath, finalFilePath);
 
     return {
       fileName,
-      imagePath: `/uploads/products/${fileName}`,
+      imagePath,
     };
   }
 
   async deleteProductImage(imagePath: string): Promise<void> {
-    if (!imagePath.startsWith("/uploads/products/")) {
-      return;
-    }
-
-    const fullPath = path.join(process.cwd(), "public", imagePath);
-
-    try {
-      await unlink(fullPath);
-    } catch {
-      // no-op for local development
+    for (const fullPath of resolveProductImageDiskPaths(imagePath)) {
+      try {
+        await unlink(fullPath);
+      } catch {
+        // no-op for local development
+      }
     }
   }
 

@@ -1,12 +1,12 @@
 import { Prisma, type Product, type ProductImportSource } from "@/generated/prisma/client";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { localProductImageStorage } from "@/server/storage/local-storage-service";
+import { resolveProductImageDiskPaths } from "@/server/storage/product-image-paths";
 import { resolveProductImporter } from "@/server/importers/provider";
 import type { ImportedProductData } from "@/server/importers/types";
-import { createProduct, guessAndApplyFilamentRequirements } from "./product-service";
+import { createProduct } from "./product-service";
 
 const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"]);
 
@@ -206,16 +206,14 @@ async function getExistingProductImageHashes(productId: string) {
 
   await Promise.all(
     existingImages.map(async (image) => {
-      if (!image.imagePath.startsWith("/uploads/products/")) {
-        return;
-      }
-
-      try {
-        const fullPath = path.join(process.cwd(), "public", image.imagePath);
-        const bytes = await readFile(fullPath);
-        hashes.add(bufferHash(bytes));
-      } catch {
-        // Skip images that are no longer present on disk.
+      for (const fullPath of resolveProductImageDiskPaths(image.imagePath)) {
+        try {
+          const bytes = await readFile(fullPath);
+          hashes.add(bufferHash(bytes));
+          return;
+        } catch {
+          // Try the next possible location.
+        }
       }
     }),
   );
@@ -278,18 +276,6 @@ function buildProductionNotes(imported: ImportedProductData) {
   ].filter(Boolean);
 
   return lines.join("\n");
-}
-
-function buildFilamentGuessSourceText(imported: ImportedProductData) {
-  return [
-    imported.title,
-    imported.shortDescription,
-    imported.fullDescription,
-    imported.tags.join(", "),
-    imported.creatorName ? `Creator: ${imported.creatorName}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 async function backfillImportIdentity(
@@ -511,8 +497,6 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
   skippedDuplicateImageCount: number;
   source: string;
   wasDuplicate: boolean;
-  guessedFilamentCount: number;
-  addedFilamentRequirementCount: number;
 }> {
   const importer = resolveProductImporter(input.sourceUrl);
   if (!importer) {
@@ -530,8 +514,6 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
       skippedDuplicateImageCount: 0,
       source: imported.source,
       wasDuplicate: true,
-      guessedFilamentCount: 0,
-      addedFilamentRequirementCount: 0,
     };
   }
 
@@ -557,8 +539,6 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
       skippedDuplicateImageCount: 0,
       source: imported.source,
       wasDuplicate: true,
-      guessedFilamentCount: 0,
-      addedFilamentRequirementCount: 0,
     };
   }
 
@@ -567,20 +547,12 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
       ? await saveImportedImages(product.id, imported.title, imported.imageUrls)
       : { savedCount: 0, skippedDuplicateCount: 0 };
 
-  const filamentGuessResult = await guessAndApplyFilamentRequirements({
-    productId: product.id,
-    sourceText: buildFilamentGuessSourceText(imported),
-    createMissingFilaments: imported.source === "THANGS",
-  });
-
   return {
     product,
     importedImageCount: imageResult.savedCount,
     skippedDuplicateImageCount: imageResult.skippedDuplicateCount,
     source: imported.source,
     wasDuplicate: false,
-    guessedFilamentCount: filamentGuessResult.matchedCount,
-    addedFilamentRequirementCount: filamentGuessResult.addedCount,
   };
 }
 
@@ -593,8 +565,6 @@ export async function refreshProductFromSourceUrl(input: {
   importedImageCount: number;
   skippedDuplicateImageCount: number;
   source: string;
-  guessedFilamentCount: number;
-  addedFilamentRequirementCount: number;
 }> {
   const existingProduct = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -623,18 +593,11 @@ export async function refreshProductFromSourceUrl(input: {
     input.importImages && imported.imageUrls.length > 0
       ? await saveImportedImages(product.id, imported.title, imported.imageUrls)
       : { savedCount: 0, skippedDuplicateCount: 0 };
-  const filamentGuessResult = await guessAndApplyFilamentRequirements({
-    productId: product.id,
-    sourceText: buildFilamentGuessSourceText(imported),
-    createMissingFilaments: imported.source === "THANGS",
-  });
 
   return {
     product,
     importedImageCount: imageResult.savedCount,
     skippedDuplicateImageCount: imageResult.skippedDuplicateCount,
     source: imported.source,
-    guessedFilamentCount: filamentGuessResult.matchedCount,
-    addedFilamentRequirementCount: filamentGuessResult.addedCount,
   };
 }

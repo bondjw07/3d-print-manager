@@ -35,8 +35,6 @@ type ProductImportResponse = {
     wasDuplicate: boolean;
     importedImageCount: number;
     skippedDuplicateImageCount: number;
-    guessedFilamentCount?: number;
-    addedFilamentRequirementCount?: number;
   };
 };
 
@@ -264,14 +262,10 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
             });
           } else {
             setImportedCount((value) => value + 1);
-            const guessedDetail =
-              typeof payload.result.guessedFilamentCount === "number"
-                ? ` Filament guesses: ${payload.result.guessedFilamentCount} matched, ${payload.result.addedFilamentRequirementCount ?? 0} added.`
-                : "";
             appendLog({
               url: normalizedUrl,
               status: "imported",
-              message: `${payload.result.importedImageCount} image${payload.result.importedImageCount === 1 ? "" : "s"} imported, ${payload.result.skippedDuplicateImageCount} duplicate${payload.result.skippedDuplicateImageCount === 1 ? "" : "s"} skipped.${guessedDetail}`,
+              message: `${payload.result.importedImageCount} image${payload.result.importedImageCount === 1 ? "" : "s"} imported, ${payload.result.skippedDuplicateImageCount} duplicate${payload.result.skippedDuplicateImageCount === 1 ? "" : "s"} skipped.`,
             });
           }
         } catch (error) {
