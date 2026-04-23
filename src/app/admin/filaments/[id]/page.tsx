@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import {
   deactivateFilamentAction,
   deleteFilamentAction,
@@ -80,6 +80,15 @@ export default async function AdminFilamentDetailPage({
                 placeholder="Material type (PLA, PETG...)"
                 required
               />
+              <Input
+                name="spoolCostPerKg"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={filament.spoolCostPerKg.toString()}
+                placeholder="Cost per 1000g spool (USD)"
+                required
+              />
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isActive">
                   Active
@@ -128,6 +137,10 @@ export default async function AdminFilamentDetailPage({
                 <span className="font-medium text-slate-900">Stock:</span> {filament.fullRollCount} full roll
                 {filament.fullRollCount === 1 ? "" : "s"} + {filament.partialRolls.length} partial roll
                 {filament.partialRolls.length === 1 ? "" : "s"} ({totalPartialGrams.toFixed(1)} g partial)
+              </p>
+              <p className="text-slate-700">
+                <span className="font-medium text-slate-900">Cost per 1000g:</span>{" "}
+                {formatCurrency(filament.spoolCostPerKg.toString())}
               </p>
             </div>
           </CardContent>

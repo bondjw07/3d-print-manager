@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/mock-auth-provider";
 import {
+  bulkUpdateFilamentSpoolCost,
   createFilament,
   deleteAllFilaments,
   deleteFilament,
@@ -59,6 +60,7 @@ import {
 } from "@/server/services/product-service";
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import {
+  filamentBulkCostUpdateSchema,
   filamentFormSchema,
   filamentStockUpdateSchema,
   inventoryUpdateSchema,
@@ -507,6 +509,32 @@ export async function updateFilamentAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", "Filament updated."));
 }
 
+export async function bulkUpdateFilamentSpoolCostAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/filaments");
+  const parsed = filamentBulkCostUpdateSchema.safeParse({
+    filamentIds: formData.getAll("filamentIds").map((value) => String(value)),
+    spoolCostPerKg: formData.get("spoolCostPerKg"),
+  });
+
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  const updatedFilaments = await bulkUpdateFilamentSpoolCost(parsed.data);
+  revalidatePath("/admin/filaments");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/queue");
+  redirect(
+    appendStatus(
+      redirectTo,
+      "success",
+      `${updatedFilaments} filament${updatedFilaments === 1 ? "" : "s"} updated.`,
+    ),
+  );
+}
+
 export async function updateFilamentStockAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -804,6 +832,7 @@ export async function updateRequestByAdminAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", message));
   }
   revalidatePath("/admin/requests");
+  revalidatePath(`/admin/requests/${requestId}`);
   revalidatePath("/requests");
   revalidatePath("/my-requests");
   redirect(appendStatus(redirectTo, "success", "Request updated."));
@@ -908,6 +937,7 @@ export async function convertRequestToQueueAction(formData: FormData) {
   }
 
   revalidatePath("/admin/requests");
+  revalidatePath(`/admin/requests/${requestId}`);
   revalidatePath("/admin/queue");
   revalidatePath("/admin/inventory");
   revalidatePath("/requests");

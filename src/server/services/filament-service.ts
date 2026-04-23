@@ -36,6 +36,7 @@ export async function createFilament(data: {
   brand?: string;
   colorLabel: string;
   materialType: string;
+  spoolCostPerKg: number;
   notes?: string;
   isActive: boolean;
 }) {
@@ -45,6 +46,7 @@ export async function createFilament(data: {
       brand: data.brand || null,
       colorLabel: data.colorLabel,
       materialType: data.materialType,
+      spoolCostPerKg: data.spoolCostPerKg,
       notes: data.notes || null,
       isActive: data.isActive,
     },
@@ -58,6 +60,7 @@ export async function updateFilament(
     brand?: string;
     colorLabel: string;
     materialType: string;
+    spoolCostPerKg: number;
     notes?: string;
     isActive: boolean;
   },
@@ -69,10 +72,32 @@ export async function updateFilament(
       brand: data.brand || null,
       colorLabel: data.colorLabel,
       materialType: data.materialType,
+      spoolCostPerKg: data.spoolCostPerKg,
       notes: data.notes || null,
       isActive: data.isActive,
     },
   });
+}
+
+export async function bulkUpdateFilamentSpoolCost(input: {
+  filamentIds: string[];
+  spoolCostPerKg: number;
+}) {
+  const filamentIds = Array.from(new Set(input.filamentIds));
+  if (filamentIds.length === 0) {
+    return 0;
+  }
+
+  const result = await prisma.filament.updateMany({
+    where: {
+      id: { in: filamentIds },
+    },
+    data: {
+      spoolCostPerKg: input.spoolCostPerKg,
+    },
+  });
+
+  return result.count;
 }
 
 export async function updateFilamentStock(

@@ -102,6 +102,7 @@ export const filamentFormSchema = z.object({
   brand: z.string().trim().optional(),
   colorLabel: z.string().trim().min(2),
   materialType: z.string().trim().min(2),
+  spoolCostPerKg: z.coerce.number().min(0).max(1000),
   notes: z.string().trim().optional(),
   isActive: boolLike,
 });
@@ -109,6 +110,11 @@ export const filamentFormSchema = z.object({
 export const filamentStockUpdateSchema = z.object({
   fullRollCount: z.coerce.number().int().min(0).max(500),
   partialRollGrams: z.array(z.coerce.number().positive().max(5000)).max(100).default([]),
+});
+
+export const filamentBulkCostUpdateSchema = z.object({
+  filamentIds: z.array(z.string().trim().min(1)).min(1, "Select at least one filament."),
+  spoolCostPerKg: z.coerce.number().min(0).max(1000),
 });
 
 export const productFilamentRequirementSchema = z.object({

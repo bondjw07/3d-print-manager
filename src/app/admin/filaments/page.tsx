@@ -5,10 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { formatCurrency } from "@/lib/utils";
 import { FilamentCsvImportForm } from "@/components/forms/filament-csv-import-form";
-import { createFilamentAction } from "@/server/actions/portal-actions";
+import {
+  bulkUpdateFilamentSpoolCostAction,
+  createFilamentAction,
+} from "@/server/actions/portal-actions";
 import { getFilaments } from "@/server/services/filament-service";
 
 export default async function AdminFilamentsPage({
@@ -18,6 +23,9 @@ export default async function AdminFilamentsPage({
 }) {
   const [params, allFilaments] = await Promise.all([searchParams, getFilaments(true)]);
   const query = params.q?.trim().toLowerCase() ?? "";
+  const redirectTo = params.q?.trim()
+    ? `/admin/filaments?q=${encodeURIComponent(params.q.trim())}`
+    : "/admin/filaments";
 
   const filaments = query
     ? allFilaments.filter((filament) => {
@@ -67,6 +75,15 @@ export default async function AdminFilamentsPage({
             <Input name="brand" placeholder="Brand (optional)" />
             <Input name="colorLabel" placeholder="Color label" required />
             <Input name="materialType" placeholder="Material type (PLA, PETG...)" required />
+            <Input
+              name="spoolCostPerKg"
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Cost per 1000g spool (USD)"
+              defaultValue="0"
+              required
+            />
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isActive">
                 Active
@@ -103,14 +120,46 @@ export default async function AdminFilamentsPage({
             </Button>
           </form>
 
+          <form
+            id="bulk-filament-cost-update-form"
+            action={bulkUpdateFilamentSpoolCostAction}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_220px_auto]"
+          >
+            <input type="hidden" name="redirectTo" value={redirectTo} />
+            <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
+              Bulk update selected filament spool cost (per 1000g).
+            </p>
+            <Input
+              name="spoolCostPerKg"
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Spool cost (USD)"
+              required
+            />
+            <Button type="submit">Apply to Selected</Button>
+          </form>
+
           <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-2 py-2">
+                    <div className="flex items-center gap-2">
+                      <SelectAllFormCheckbox
+                        formId="bulk-filament-cost-update-form"
+                        inputName="filamentIds"
+                        totalCount={filaments.length}
+                        ariaLabel="Select all filaments"
+                      />
+                      <span className="sr-only">Select</span>
+                    </div>
+                  </th>
                   <th className="px-2 py-2">Name</th>
                   <th className="px-2 py-2">Material</th>
                   <th className="px-2 py-2">Color</th>
                   <th className="px-2 py-2">Brand</th>
+                  <th className="px-2 py-2">Cost / 1000g</th>
                   <th className="px-2 py-2">Stock</th>
                   <th className="px-2 py-2">Usage</th>
                   <th className="px-2 py-2">Status</th>
@@ -127,6 +176,16 @@ export default async function AdminFilamentsPage({
                   return (
                     <tr key={filament.id} className="border-b border-slate-100 hover:bg-slate-50/70">
                       <td className="px-2 py-3">
+                        <input
+                          type="checkbox"
+                          name="filamentIds"
+                          value={filament.id}
+                          form="bulk-filament-cost-update-form"
+                          className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                          aria-label={`Select ${filament.name}`}
+                        />
+                      </td>
+                      <td className="px-2 py-3">
                         <Link href={`/admin/filaments/${filament.id}`} className="font-medium text-slate-900 hover:underline">
                           {filament.name}
                         </Link>
@@ -134,6 +193,7 @@ export default async function AdminFilamentsPage({
                       <td className="px-2 py-3 text-sm text-slate-700">{filament.materialType}</td>
                       <td className="px-2 py-3 text-sm text-slate-700">{filament.colorLabel}</td>
                       <td className="px-2 py-3 text-sm text-slate-700">{filament.brand || "-"}</td>
+                      <td className="px-2 py-3 text-sm text-slate-700">{formatCurrency(filament.spoolCostPerKg.toString())}</td>
                       <td className="px-2 py-3 text-sm text-slate-700">
                         <p>{filament.fullRollCount} full roll{filament.fullRollCount === 1 ? "" : "s"}</p>
                         <p className="text-xs text-slate-500">
@@ -158,7 +218,7 @@ export default async function AdminFilamentsPage({
                 })}
                 {filaments.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={10} className="px-2 py-10 text-center text-sm text-slate-500">
                       No filaments found for this search.
                     </td>
                   </tr>

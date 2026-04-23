@@ -1,5 +1,6 @@
 import { Prisma, QueuePriority, QueueSourceType, QueueStatus, RequestStatus, type UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { calculateRequestEstimate } from "@/lib/request-estimates";
 import {
   DEFAULT_SCALE_PERCENT,
   defaultFilamentScalePercentForModelScale,
@@ -130,7 +131,7 @@ export async function getRequestSummariesForUserByProductIds(userId: string, pro
 }
 
 export async function getAllRequests() {
-  return prisma.request.findMany({
+  const requests = await prisma.request.findMany({
     include: {
       requesterUser: true,
       product: {
@@ -139,12 +140,60 @@ export async function getAllRequests() {
             where: { isPrimary: true },
             take: 1,
           },
+          filamentRequirements: {
+            include: {
+              filament: {
+                select: {
+                  spoolCostPerKg: true,
+                },
+              },
+            },
+          },
         },
       },
-      queueItems: true,
     },
     orderBy: { createdAt: "desc" },
   });
+
+  return requests.map((request) => ({
+    ...request,
+    ...calculateRequestEstimate(request),
+  }));
+}
+
+export async function getRequestByIdForAdmin(requestId: string) {
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: {
+      requesterUser: true,
+      product: {
+        include: {
+          images: {
+            where: { isPrimary: true },
+            take: 1,
+          },
+          filamentRequirements: {
+            include: {
+              filament: true,
+            },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
+      queueItems: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!request) {
+    return null;
+  }
+
+  return {
+    ...request,
+    ...calculateRequestEstimate(request),
+  };
 }
 
 export async function createRequestForUser(input: {

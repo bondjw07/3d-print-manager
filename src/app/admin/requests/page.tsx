@@ -1,19 +1,16 @@
 import Image from "next/image";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { humanizeEnum, requestStatusOptions } from "@/lib/domain";
-import {
-  bulkManageRequestsAction,
-  updateRequestByAdminAction,
-} from "@/server/actions/portal-actions";
+import { bulkManageRequestsAction } from "@/server/actions/portal-actions";
 import { getAllRequests } from "@/server/services/request-service";
 
 function formatScalePercent(value: unknown) {
@@ -27,6 +24,19 @@ function formatScalePercent(value: unknown) {
   }
 
   return `${numeric.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function formatWeightGrams(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "—";
+  }
+
+  if (Math.abs(numeric - Math.round(numeric)) < 0.001) {
+    return `${Math.round(numeric)} g`;
+  }
+
+  return `${numeric.toFixed(2).replace(/\.?0+$/, "")} g`;
 }
 
 export default async function AdminRequestsPage({
@@ -63,7 +73,7 @@ export default async function AdminRequestsPage({
           >
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
-              Bulk manage selected requests: update status/notes, convert to queue, or delete. Scale adjustments are per-request below.
+              Bulk manage selected requests: update status/notes, convert to queue, or delete. Scale adjustments are per-request on the detail page.
             </p>
             <Select name="operation" defaultValue="UPDATE">
               <option value="UPDATE">Update status + notes</option>
@@ -107,117 +117,112 @@ export default async function AdminRequestsPage({
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2">Scale</th>
+                  <th className="px-2 py-2">Total Weight (g)</th>
+                  <th className="px-2 py-2">Calculated Cost</th>
                   <th className="px-2 py-2">Request Notes</th>
-                  <th className="px-2 py-2">Admin Notes</th>
-                  <th className="px-2 py-2">Queue Links</th>
                   <th className="px-2 py-2">Submitted</th>
-                  <th className="px-2 py-2">Update</th>
                 </tr>
               </thead>
               <tbody>
-                {requests.map((request) => (
-                  <tr key={request.id} className="border-b border-slate-100 align-top">
-                    <td className="px-2 py-3">
-                      <input
-                        type="checkbox"
-                        name="requestIds"
-                        value={request.id}
-                        form="bulk-request-management-form"
-                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                        aria-label={`Select request from ${request.requesterUser.name}`}
-                      />
-                    </td>
-                    <td className="px-2 py-3">
-                      {request.product.images[0] ? (
-                        <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                          <Image
-                            src={request.product.images[0].imagePath}
-                            alt={request.product.publicName}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">
-                          No Image
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-3 text-sm text-slate-700">
-                      <p className="font-medium text-slate-900">{request.requesterUser.name}</p>
-                      <p className="text-xs text-slate-500">{request.requesterUser.email}</p>
-                    </td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{request.product.publicName}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{request.quantity}</td>
-                    <td className="px-2 py-3">
-                      <StatusBadge value={request.status} />
-                    </td>
-                    <td className="px-2 py-3 text-xs text-slate-600">
-                      <p>Model: {formatScalePercent(request.modelScalePercent)}</p>
-                      <p>Filament: {formatScalePercent(request.filamentScalePercent)}</p>
-                    </td>
-                    <td className="max-w-xs px-2 py-3 text-xs text-slate-600">
-                      {request.notes ? (
-                        <p className="whitespace-pre-wrap break-words">{request.notes}</p>
-                      ) : (
-                        <span className="text-slate-400">None</span>
-                      )}
-                    </td>
-                    <td className="max-w-xs px-2 py-3 text-xs text-slate-600">
-                      {request.adminNotes ? (
-                        <p className="whitespace-pre-wrap break-words">{request.adminNotes}</p>
-                      ) : (
-                        <span className="text-slate-400">None</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-3 text-xs text-slate-600">
-                      {request.queueItems.length > 0
-                        ? `${request.queueItems.length} linked item${request.queueItems.length === 1 ? "" : "s"}`
-                        : "None"}
-                    </td>
-                    <td className="px-2 py-3 text-xs text-slate-500">{formatDateTime(request.createdAt)}</td>
-                    <td className="px-2 py-3">
-                      <form action={updateRequestByAdminAction} className="grid min-w-56 gap-2">
-                        <input type="hidden" name="requestId" value={request.id} />
-                        <input type="hidden" name="redirectTo" value={redirectTo} />
-                        <Select name="status" defaultValue={request.status}>
-                          {requestStatusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {humanizeEnum(status)}
-                            </option>
-                          ))}
-                        </Select>
-                        <Input
-                          name="modelScalePercent"
-                          type="number"
-                          step="0.01"
-                          min={10}
-                          max={400}
-                          defaultValue={request.modelScalePercent.toString()}
-                          placeholder="Model scale %"
+                {requests.map((request) => {
+                  const detailHref = `/admin/requests/${request.id}`;
+                  const rowLinkClassName =
+                    "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
+
+                  return (
+                    <tr key={request.id} className="border-b border-slate-100 align-top">
+                      <td className="px-2 py-3">
+                        <input
+                          type="checkbox"
+                          name="requestIds"
+                          value={request.id}
+                          form="bulk-request-management-form"
+                          className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                          aria-label={`Select request from ${request.requesterUser.name}`}
                         />
-                        <Input
-                          name="filamentScalePercent"
-                          type="number"
-                          step="0.01"
-                          min={1}
-                          max={400}
-                          defaultValue={request.filamentScalePercent.toString()}
-                          placeholder="Filament scale %"
-                        />
-                        <Textarea
-                          name="adminNotes"
-                          defaultValue={request.adminNotes ?? ""}
-                          placeholder="Admin notes"
-                          className="min-h-[70px]"
-                        />
-                        <Button type="submit" size="sm" variant="secondary">
-                          Save
-                        </Button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      <td className="p-0">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {request.product.images[0] ? (
+                            <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                              <Image
+                                src={request.product.images[0].imagePath}
+                                alt={request.product.publicName}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">
+                              No Image
+                            </div>
+                          )}
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <p className="font-medium text-slate-900">{request.requesterUser.name}</p>
+                          <p className="text-xs text-slate-500">{request.requesterUser.email}</p>
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {request.product.publicName}
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {request.quantity}
+                        </Link>
+                      </td>
+
+                      <td className="p-0">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <StatusBadge value={request.status} />
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <p>Model: {formatScalePercent(request.modelScalePercent)}</p>
+                          <p>Filament: {formatScalePercent(request.filamentScalePercent)}</p>
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {formatWeightGrams(request.totalWeightGrams)}
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {request.calculatedCost === null ? "—" : formatCurrency(request.calculatedCost)}
+                        </Link>
+                      </td>
+
+                      <td className="max-w-xs p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {request.notes ? (
+                            <p className="whitespace-pre-wrap break-words">{request.notes}</p>
+                          ) : (
+                            <span className="text-slate-400">None</span>
+                          )}
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-xs text-slate-500">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {formatDateTime(request.createdAt)}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </TableContainer>
