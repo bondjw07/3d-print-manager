@@ -20,6 +20,7 @@ type RequestPrintModalButtonProps = {
   productSlug: string;
   redirectTo: string;
   canSubmitRequest: boolean;
+  isKitKilnModel?: boolean;
   isAdmin?: boolean;
   requestAsOptions?: RequestAsOption[];
   requestAsDefaultUserId?: string;
@@ -34,6 +35,7 @@ export function RequestPrintModalButton({
   productSlug,
   redirectTo,
   canSubmitRequest,
+  isKitKilnModel = false,
   isAdmin = false,
   requestAsOptions = [],
   requestAsDefaultUserId,
@@ -79,6 +81,7 @@ export function RequestPrintModalButton({
               <form action={submitRequestAction} className="mt-4 grid gap-3">
                 <input type="hidden" name="redirectTo" value={redirectTo} />
                 <input type="hidden" name="productId" value={productId} />
+                {!isKitKilnModel ? <input type="hidden" name="modelScalePercent" value="100" /> : null}
                 {isAdmin ? (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={`${productId}-requestAsUserId`}>
@@ -113,6 +116,17 @@ export function RequestPrintModalButton({
                     required
                   />
                 </div>
+                {isKitKilnModel ? (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={`${productId}-modelScalePercent`}>
+                      Model scale
+                    </label>
+                    <Select id={`${productId}-modelScalePercent`} name="modelScalePercent" defaultValue="100">
+                      <option value="100">100%</option>
+                      <option value="75">75% (uses 50% filament)</option>
+                    </Select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={`${productId}-notes`}>
                     Notes (optional)

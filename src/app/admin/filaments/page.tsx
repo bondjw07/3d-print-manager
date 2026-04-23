@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { FilamentCsvImportForm } from "@/components/forms/filament-csv-import-form";
 import { createFilamentAction } from "@/server/actions/portal-actions";
 import { getFilaments } from "@/server/services/filament-service";
 
@@ -41,6 +42,18 @@ export default async function AdminFilamentsPage({
       {params.success ? (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Filaments</CardTitle>
+          <CardDescription>
+            Upload a CSV to create filaments in bulk from columns for name, brand, color, and material type.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FilamentCsvImportForm />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -98,40 +111,54 @@ export default async function AdminFilamentsPage({
                   <th className="px-2 py-2">Material</th>
                   <th className="px-2 py-2">Color</th>
                   <th className="px-2 py-2">Brand</th>
+                  <th className="px-2 py-2">Stock</th>
                   <th className="px-2 py-2">Usage</th>
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2 text-right">Edit</th>
                 </tr>
               </thead>
               <tbody>
-                {filaments.map((filament) => (
-                  <tr key={filament.id} className="border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className="px-2 py-3">
-                      <Link href={`/admin/filaments/${filament.id}`} className="font-medium text-slate-900 hover:underline">
-                        {filament.name}
-                      </Link>
-                    </td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{filament.materialType}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{filament.colorLabel}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{filament.brand || "-"}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">
-                      {filament.productRequirements.length} products
-                    </td>
-                    <td className="px-2 py-3">
-                      <StatusBadge value={filament.isActive ? "ACTIVE" : "INACTIVE"} />
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <Link href={`/admin/filaments/${filament.id}`}>
-                        <Button size="sm" variant="secondary">
-                          Edit
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {filaments.map((filament) => {
+                  const partialGrams = filament.partialRolls.reduce(
+                    (sum, roll) => sum + Number(roll.gramsRemaining),
+                    0,
+                  );
+
+                  return (
+                    <tr key={filament.id} className="border-b border-slate-100 hover:bg-slate-50/70">
+                      <td className="px-2 py-3">
+                        <Link href={`/admin/filaments/${filament.id}`} className="font-medium text-slate-900 hover:underline">
+                          {filament.name}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-3 text-sm text-slate-700">{filament.materialType}</td>
+                      <td className="px-2 py-3 text-sm text-slate-700">{filament.colorLabel}</td>
+                      <td className="px-2 py-3 text-sm text-slate-700">{filament.brand || "-"}</td>
+                      <td className="px-2 py-3 text-sm text-slate-700">
+                        <p>{filament.fullRollCount} full roll{filament.fullRollCount === 1 ? "" : "s"}</p>
+                        <p className="text-xs text-slate-500">
+                          {filament.partialRolls.length} partial / {partialGrams.toFixed(1)} g
+                        </p>
+                      </td>
+                      <td className="px-2 py-3 text-sm text-slate-700">
+                        {filament.productRequirements.length} products
+                      </td>
+                      <td className="px-2 py-3">
+                        <StatusBadge value={filament.isActive ? "ACTIVE" : "INACTIVE"} />
+                      </td>
+                      <td className="px-2 py-3 text-right">
+                        <Link href={`/admin/filaments/${filament.id}`}>
+                          <Button size="sm" variant="secondary">
+                            Edit
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filaments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-2 py-10 text-center text-sm text-slate-500">
                       No filaments found for this search.
                     </td>
                   </tr>

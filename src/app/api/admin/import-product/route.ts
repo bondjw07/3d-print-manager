@@ -8,6 +8,8 @@ export const runtime = "nodejs";
 type ImportRequestBody = {
   sourceUrl?: string;
   importImages?: boolean;
+  creatorName?: string;
+  creatorUrl?: string;
 };
 
 export async function POST(request: Request) {
@@ -25,6 +27,8 @@ export async function POST(request: Request) {
 
   const sourceUrl = String(body.sourceUrl ?? "").trim();
   const importImages = body.importImages !== false;
+  const creatorNameOverride = String(body.creatorName ?? "").trim();
+  const creatorUrlOverride = String(body.creatorUrl ?? "").trim();
 
   if (!sourceUrl) {
     return NextResponse.json({ error: "sourceUrl is required." }, { status: 400 });
@@ -34,6 +38,8 @@ export async function POST(request: Request) {
     const result = await importProductFromSourceUrl({
       sourceUrl,
       importImages,
+      creatorNameOverride: creatorNameOverride || undefined,
+      creatorUrlOverride: creatorUrlOverride || undefined,
     });
 
     revalidatePath("/admin/products");

@@ -1,6 +1,62 @@
-import { QueuePriority, QueueSourceType, QueueStatus, RequestStatus } from "@/generated/prisma/client";
+import { Prisma, QueuePriority, QueueSourceType, QueueStatus, RequestStatus, type UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  DEFAULT_SCALE_PERCENT,
+  defaultFilamentScalePercentForModelScale,
+  isKitKilnModel,
+  isKitKilnUserModelScaleAllowed,
+  normalizeScalePercent,
+} from "@/lib/request-scale";
 import { recalculateInventoryAvailable } from "./inventory-service";
+
+const ADMIN_MODEL_SCALE_MIN_PERCENT = 10;
+const ADMIN_MODEL_SCALE_MAX_PERCENT = 400;
+const ADMIN_FILAMENT_SCALE_MIN_PERCENT = 1;
+const ADMIN_FILAMENT_SCALE_MAX_PERCENT = 400;
+
+function assertAdminModelScalePercent(modelScalePercent: number) {
+  const normalized = normalizeScalePercent(modelScalePercent);
+  if (normalized < ADMIN_MODEL_SCALE_MIN_PERCENT || normalized > ADMIN_MODEL_SCALE_MAX_PERCENT) {
+    throw new Error(`Model scale must be between ${ADMIN_MODEL_SCALE_MIN_PERCENT}% and ${ADMIN_MODEL_SCALE_MAX_PERCENT}%.`);
+  }
+  return normalized;
+}
+
+function assertAdminFilamentScalePercent(filamentScalePercent: number) {
+  const normalized = normalizeScalePercent(filamentScalePercent);
+  if (normalized < ADMIN_FILAMENT_SCALE_MIN_PERCENT || normalized > ADMIN_FILAMENT_SCALE_MAX_PERCENT) {
+    throw new Error(
+      `Filament scale must be between ${ADMIN_FILAMENT_SCALE_MIN_PERCENT}% and ${ADMIN_FILAMENT_SCALE_MAX_PERCENT}%.`,
+    );
+  }
+  return normalized;
+}
+
+function resolveRequesterModelScalePercent(input: {
+  modelScalePercent: number;
+  isKitKilnProduct: boolean;
+  actorRole: UserRole;
+}) {
+  const normalized = normalizeScalePercent(input.modelScalePercent);
+
+  if (input.actorRole === "ADMIN") {
+    return assertAdminModelScalePercent(normalized);
+  }
+
+  if (!input.isKitKilnProduct) {
+    if (normalized !== DEFAULT_SCALE_PERCENT) {
+      throw new Error("Scaled requests are only available for Kit Kiln models.");
+    }
+
+    return DEFAULT_SCALE_PERCENT;
+  }
+
+  if (!isKitKilnUserModelScaleAllowed(normalized)) {
+    throw new Error("Kit Kiln requests currently support 75% or 100% model scale.");
+  }
+
+  return normalized;
+}
 
 export type ProductRequestSummary = {
   productId: string;
@@ -95,19 +151,43 @@ export async function createRequestForUser(input: {
   requesterUserId: string;
   productId: string;
   quantity: number;
+  modelScalePercent: number;
   notes?: string;
+  actorRole: UserRole;
 }) {
-  const product = await prisma.product.findUnique({ where: { id: input.productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    select: {
+      id: true,
+      isRequestable: true,
+      importSourceCreatorName: true,
+      importSourceUrl: true,
+      productionNotes: true,
+    },
+  });
 
   if (!product || !product.isRequestable) {
     throw new Error("This product is not currently requestable.");
   }
+
+  const isKitKilnProductRequest = isKitKilnModel(product);
+  const modelScalePercent = resolveRequesterModelScalePercent({
+    modelScalePercent: input.modelScalePercent,
+    isKitKilnProduct: isKitKilnProductRequest,
+    actorRole: input.actorRole,
+  });
+  const filamentScalePercent = defaultFilamentScalePercentForModelScale({
+    modelScalePercent,
+    isKitKilnModel: isKitKilnProductRequest,
+  });
 
   return prisma.request.create({
     data: {
       requesterUserId: input.requesterUserId,
       productId: input.productId,
       quantity: input.quantity,
+      modelScalePercent,
+      filamentScalePercent,
       notes: input.notes,
       status: RequestStatus.SUBMITTED,
     },
@@ -119,24 +199,53 @@ export async function updateSubmittedRequestForUser(
   requesterUserId: string,
   input: {
     quantity: number;
+    modelScalePercent: number;
     notes?: string;
   },
+  actorRole: UserRole,
 ) {
-  const updated = await prisma.request.updateMany({
+  const request = await prisma.request.findFirst({
     where: {
       id: requestId,
       requesterUserId,
       status: RequestStatus.SUBMITTED,
     },
-    data: {
-      quantity: input.quantity,
-      notes: input.notes || null,
+    select: {
+      id: true,
+      product: {
+        select: {
+          importSourceCreatorName: true,
+          importSourceUrl: true,
+          productionNotes: true,
+        },
+      },
     },
   });
 
-  if (updated.count === 0) {
+  if (!request) {
     throw new Error("Only submitted requests can be edited.");
   }
+
+  const isKitKilnProductRequest = isKitKilnModel(request.product);
+  const modelScalePercent = resolveRequesterModelScalePercent({
+    modelScalePercent: input.modelScalePercent,
+    isKitKilnProduct: isKitKilnProductRequest,
+    actorRole,
+  });
+  const filamentScalePercent = defaultFilamentScalePercentForModelScale({
+    modelScalePercent,
+    isKitKilnModel: isKitKilnProductRequest,
+  });
+
+  await prisma.request.update({
+    where: { id: request.id },
+    data: {
+      quantity: input.quantity,
+      modelScalePercent,
+      filamentScalePercent,
+      notes: input.notes || null,
+    },
+  });
 }
 
 export async function deleteSubmittedRequestForUser(requestId: string, requesterUserId: string) {
@@ -157,15 +266,27 @@ export async function updateRequestByAdmin(
   requestId: string,
   input: {
     status: RequestStatus;
+    modelScalePercent?: number;
+    filamentScalePercent?: number;
     adminNotes?: string;
   },
 ) {
+  const data: Prisma.RequestUpdateInput = {
+    status: input.status,
+    adminNotes: input.adminNotes || null,
+  };
+
+  if (input.modelScalePercent !== undefined) {
+    data.modelScalePercent = assertAdminModelScalePercent(input.modelScalePercent);
+  }
+
+  if (input.filamentScalePercent !== undefined) {
+    data.filamentScalePercent = assertAdminFilamentScalePercent(input.filamentScalePercent);
+  }
+
   return prisma.request.update({
     where: { id: requestId },
-    data: {
-      status: input.status,
-      adminNotes: input.adminNotes || null,
-    },
+    data,
   });
 }
 
@@ -216,6 +337,8 @@ export async function convertRequestToQueue(requestId: string) {
         sourceRequestId: request.id,
         requesterUserId: request.requesterUserId,
         quantity: request.quantity,
+        modelScalePercent: request.modelScalePercent,
+        filamentScalePercent: request.filamentScalePercent,
         status: QueueStatus.PENDING,
         priority: QueuePriority.NORMAL,
       },

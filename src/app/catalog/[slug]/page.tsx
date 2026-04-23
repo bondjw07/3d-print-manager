@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { humanizeEnum } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
+import { isKitKilnModel } from "@/lib/request-scale";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
 import { submitRequestAction } from "@/server/actions/portal-actions";
 import { getPublicProductBySlug } from "@/server/services/product-service";
@@ -32,6 +33,7 @@ export default async function ProductDetailPage({
   if (!product || !product.isPublic || product.status !== "ACTIVE") {
     notFound();
   }
+  const isKitKilnProduct = isKitKilnModel(product);
 
   const images =
     product.images.length > 0
@@ -150,6 +152,7 @@ export default async function ProductDetailPage({
               <form action={submitRequestAction} className="grid gap-3 sm:max-w-xl">
                 <input type="hidden" name="redirectTo" value={`/catalog/${product.slug}`} />
                 <input type="hidden" name="productId" value={product.id} />
+                {!isKitKilnProduct ? <input type="hidden" name="modelScalePercent" value="100" /> : null}
                 {user.role === "ADMIN" ? (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="requestAsUserId">
@@ -170,6 +173,17 @@ export default async function ProductDetailPage({
                   </label>
                   <Input id="quantity" name="quantity" type="number" min={1} defaultValue={1} required />
                 </div>
+                {isKitKilnProduct ? (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="modelScalePercent">
+                      Model scale
+                    </label>
+                    <Select id="modelScalePercent" name="modelScalePercent" defaultValue="100">
+                      <option value="100">100%</option>
+                      <option value="75">75% (uses 50% filament)</option>
+                    </Select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="notes">
                     Notes (optional)

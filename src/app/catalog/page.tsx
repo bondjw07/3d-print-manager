@@ -12,6 +12,7 @@ import { getSessionUser } from "@/server/auth/mock-auth-provider";
 import { getRequestSummariesForUserByProductIds } from "@/server/services/request-service";
 import { prisma } from "@/lib/prisma";
 import { humanizeEnum } from "@/lib/domain";
+import { isKitKilnModel } from "@/lib/request-scale";
 
 export default async function CatalogPage({
   searchParams,
@@ -75,6 +76,7 @@ export default async function CatalogPage({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => {
             const primaryImage = product.images[0]?.imagePath ?? "/seed-images/geometric-planter-1.svg";
+            const isKitKilnProduct = isKitKilnModel(product);
             const defaultListing = product.listings.find(
               (listing) => listing.marketplaceType === defaultMarketplace && listing.externalUrl,
             );
@@ -128,6 +130,7 @@ export default async function CatalogPage({
                         productSlug={product.slug}
                         redirectTo={redirectTo}
                         canSubmitRequest={canSubmitRequest}
+                        isKitKilnModel={isKitKilnProduct}
                         isAdmin={user?.role === "ADMIN"}
                         requestAsOptions={requestAsUsers}
                         requestAsDefaultUserId={user?.id}

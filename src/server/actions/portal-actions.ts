@@ -12,8 +12,10 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/mock-auth-provider";
 import {
   createFilament,
+  deleteAllFilaments,
   deleteFilament,
   deactivateFilament,
+  updateFilamentStock,
   updateFilament,
 } from "@/server/services/filament-service";
 import {
@@ -58,6 +60,7 @@ import {
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import {
   filamentFormSchema,
+  filamentStockUpdateSchema,
   inventoryUpdateSchema,
   listingBulkProductUpdateSchema,
   listingFormSchema,
@@ -504,6 +507,32 @@ export async function updateFilamentAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", "Filament updated."));
 }
 
+export async function updateFilamentStockAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const filamentId = String(formData.get("filamentId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/filaments");
+  const partialRollGrams = formData
+    .getAll("partialRollGrams")
+    .map((value) => String(value).trim())
+    .filter((value) => value.length > 0);
+
+  const parsed = filamentStockUpdateSchema.safeParse({
+    fullRollCount: formData.get("fullRollCount"),
+    partialRollGrams,
+  });
+
+  if (!filamentId || !parsed.success) {
+    redirect(appendStatus(redirectTo, "error", parsed.success ? "Filament id is missing." : firstIssueMessage(parsed.error)));
+  }
+
+  await updateFilamentStock(filamentId, parsed.data);
+  revalidatePath("/admin/filaments");
+  revalidatePath(`/admin/filaments/${filamentId}`);
+  revalidatePath("/admin/queue");
+  redirect(appendStatus(redirectTo, "success", "Filament stock updated."));
+}
+
 export async function deactivateFilamentAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -696,7 +725,9 @@ export async function submitRequestAction(formData: FormData) {
     requesterUserId: requesterUser.id,
     productId: parsed.data.productId,
     quantity: parsed.data.quantity,
+    modelScalePercent: parsed.data.modelScalePercent,
     notes: parsed.data.notes,
+    actorRole: user.role,
   });
 
   revalidatePath("/catalog");
@@ -718,7 +749,7 @@ export async function updateOwnRequestAction(formData: FormData) {
   }
 
   try {
-    await updateSubmittedRequestForUser(requestId, user.id, parsed.data);
+    await updateSubmittedRequestForUser(requestId, user.id, parsed.data, user.role);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to update request.";
     redirect(appendStatus(redirectTo, "error", message));
@@ -766,7 +797,12 @@ export async function updateRequestByAdminAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", parsed.success ? "Request id is missing." : firstIssueMessage(parsed.error)));
   }
 
-  await updateRequestByAdmin(requestId, parsed.data);
+  try {
+    await updateRequestByAdmin(requestId, parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update request.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
   revalidatePath("/admin/requests");
   revalidatePath("/requests");
   revalidatePath("/my-requests");
@@ -978,6 +1014,40 @@ export async function deleteAllProductsAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to delete all products.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+}
+
+export async function deleteAllFilamentsAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const confirmWord = String(formData.get("confirmWord") ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (confirmWord !== "delete") {
+    redirect(appendStatus(redirectTo, "error", "Type \"delete\" to confirm bulk deletion."));
+  }
+
+  try {
+    const { deletedFilamentCount, removedRequirementCount } = await deleteAllFilaments();
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/filaments");
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/queue");
+    revalidatePath("/catalog");
+
+    if (deletedFilamentCount === 0) {
+      redirect(appendStatus(redirectTo, "success", "No filaments found to delete."));
+    }
+
+    const message = `Deleted ${deletedFilamentCount} filament${deletedFilamentCount === 1 ? "" : "s"} and removed ${removedRequirementCount} linked product requirement${removedRequirementCount === 1 ? "" : "s"}.`;
+    redirect(appendStatus(redirectTo, "success", message));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete all filaments.";
     redirect(appendStatus(redirectTo, "error", message));
   }
 }

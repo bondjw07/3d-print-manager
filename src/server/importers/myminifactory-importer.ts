@@ -35,6 +35,34 @@ function isMyMiniFactoryHost(hostname: string) {
   );
 }
 
+function normalizeMyMiniFactoryCreatorProfileUrl(value: string) {
+  try {
+    const parsed = new URL(value, "https://www.myminifactory.com");
+    if (!isMyMiniFactoryHost(parsed.hostname)) {
+      return undefined;
+    }
+
+    const pathname = normalizePath(parsed.pathname);
+    if (!pathname.startsWith("/users/")) {
+      return undefined;
+    }
+
+    const creatorSegment = pathname.match(/^\/users\/([^/]+)/i)?.[1];
+    if (!creatorSegment) {
+      return undefined;
+    }
+
+    parsed.protocol = "https:";
+    parsed.hostname = "www.myminifactory.com";
+    parsed.pathname = `/users/${creatorSegment}`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeTitle(value: string) {
   return value
     .replace(/^3D Printable\s+/i, "")
@@ -454,6 +482,15 @@ function parseHtml(sourceUrl: string, html: string, objectId?: string): Imported
 
   const creatorFromAuthorMeta = decodeHtml(html.match(/<meta\s+name="author"\s+content="([^"]+)"/i)?.[1] ?? "");
   const creatorName = creatorFromAuthorMeta || undefined;
+  const creatorUrl =
+    normalizeMyMiniFactoryCreatorProfileUrl(
+      html.match(/https?:\/\/(?:www\.)?myminifactory\.com\/users\/[^"'<>\s)]+/i)?.[0] ?? "",
+    ) ??
+    (creatorName
+      ? normalizeMyMiniFactoryCreatorProfileUrl(
+          `https://www.myminifactory.com/users/${encodeURIComponent(creatorName)}`,
+        )
+      : undefined);
 
   const description = decodeHtml(ogDescription ?? "").trim();
 
@@ -468,6 +505,7 @@ function parseHtml(sourceUrl: string, html: string, objectId?: string): Imported
     sourceUrl,
     sourceReferenceId: objectId,
     creatorName,
+    creatorUrl,
     title,
     shortDescription: description.slice(0, 180) || undefined,
     fullDescription: description || undefined,
@@ -490,10 +528,15 @@ function parseMarkdown(sourceUrl: string, markdown: string, objectId?: string): 
     throw new Error("Unable to parse MyMiniFactory object title.");
   }
 
-  const creatorMatch = markdown.match(
-    /\[([^\]]+?)\]\((?:https?:\/\/)?(?:www\.)?myminifactory\.com\/users\/[^)]+\)/i,
-  )?.[1];
-  const creatorName = creatorMatch?.replace(/\s*-\s*by\s*/i, " / ").trim() || undefined;
+  const creatorLinkMatch = markdown.match(
+    /\[([^\]]+?)\]\(((?:https?:\/\/)?(?:www\.)?myminifactory\.com\/users\/[^)]+)\)/i,
+  );
+  const creatorName = creatorLinkMatch?.[1]?.replace(/\s*-\s*by\s*/i, " / ").trim() || undefined;
+  const creatorUrl = creatorLinkMatch?.[2]
+    ? normalizeMyMiniFactoryCreatorProfileUrl(creatorLinkMatch[2])
+    : creatorName
+      ? normalizeMyMiniFactoryCreatorProfileUrl(`https://www.myminifactory.com/users/${encodeURIComponent(creatorName)}`)
+      : undefined;
 
   const descriptionSection = markdown.split(/\nDescription\n/i)[1]?.split(/\nLicense\n/i)[0] ?? "";
   const descriptionRaw = cleanMarkdownText(descriptionSection);
@@ -523,6 +566,7 @@ function parseMarkdown(sourceUrl: string, markdown: string, objectId?: string): 
     sourceUrl,
     sourceReferenceId: objectId,
     creatorName,
+    creatorUrl,
     title,
     shortDescription,
     fullDescription,

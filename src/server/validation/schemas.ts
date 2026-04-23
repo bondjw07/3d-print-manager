@@ -11,6 +11,7 @@ import {
   SyncStatus,
   UserRole,
 } from "@/generated/prisma/client";
+import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
 import { z } from "zod";
 
 const boolLike = z.union([z.literal("true"), z.literal("false")]).transform((value) => value === "true");
@@ -37,6 +38,29 @@ const optionalDate = z.preprocess(
     return new Date(String(value));
   },
   z.date().optional(),
+);
+
+const requiredModelScalePercent = z.coerce.number().min(10).max(400);
+const optionalModelScalePercent = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return undefined;
+    }
+
+    return Number(value);
+  },
+  z.number().min(10).max(400).optional(),
+);
+
+const optionalFilamentScalePercent = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return undefined;
+    }
+
+    return Number(value);
+  },
+  z.number().min(1).max(400).optional(),
 );
 
 export const productFormSchema = z.object({
@@ -82,6 +106,11 @@ export const filamentFormSchema = z.object({
   isActive: boolLike,
 });
 
+export const filamentStockUpdateSchema = z.object({
+  fullRollCount: z.coerce.number().int().min(0).max(500),
+  partialRollGrams: z.array(z.coerce.number().positive().max(5000)).max(100).default([]),
+});
+
 export const productFilamentRequirementSchema = z.object({
   filamentId: z.string().trim().min(1),
   estimatedGramsPerPrint: optionalNumber,
@@ -111,6 +140,7 @@ export const listingBulkProductUpdateSchema = z.object({
 export const requestCreateSchema = z.object({
   productId: z.string().trim().min(1),
   quantity: z.coerce.number().int().min(1).max(50),
+  modelScalePercent: requiredModelScalePercent.default(DEFAULT_SCALE_PERCENT),
   notes: z.string().trim().max(500).optional(),
   requestAsUserId: z
     .preprocess((value) => {
@@ -125,11 +155,14 @@ export const requestCreateSchema = z.object({
 
 export const requestUserUpdateSchema = z.object({
   quantity: z.coerce.number().int().min(1).max(50),
+  modelScalePercent: requiredModelScalePercent.default(DEFAULT_SCALE_PERCENT),
   notes: z.string().trim().max(500).optional(),
 });
 
 export const requestAdminUpdateSchema = z.object({
   status: z.nativeEnum(RequestStatus),
+  modelScalePercent: optionalModelScalePercent,
+  filamentScalePercent: optionalFilamentScalePercent,
   adminNotes: z.string().trim().max(1000).optional(),
 });
 

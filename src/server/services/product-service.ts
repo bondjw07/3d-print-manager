@@ -33,7 +33,8 @@ function isUnknownImportIdentityArgumentError(error: unknown) {
   return (
     error.message.includes("Unknown argument `importSource`") ||
     error.message.includes("Unknown argument `importSourceReferenceId`") ||
-    error.message.includes("Unknown argument `importSourceNormalizedUrl`")
+    error.message.includes("Unknown argument `importSourceNormalizedUrl`") ||
+    error.message.includes("Unknown argument `importSourceCreatorUrl`")
   );
 }
 
@@ -304,6 +305,7 @@ export async function createProduct(data: {
   importSourceUrl?: string;
   importSourceNormalizedUrl?: string;
   importSourceCreatorName?: string;
+  importSourceCreatorUrl?: string;
 }) {
   const baseSlug = slugify(data.publicName);
   const slug = await ensureUniqueSlug(baseSlug);
@@ -348,6 +350,7 @@ export async function createProduct(data: {
         importSourceUrl: data.importSourceUrl,
         importSourceNormalizedUrl: data.importSourceNormalizedUrl,
         importSourceCreatorName: data.importSourceCreatorName,
+        importSourceCreatorUrl: data.importSourceCreatorUrl,
       },
     });
 

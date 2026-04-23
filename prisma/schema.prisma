@@ -147,6 +147,7 @@ model Product {
   importSourceUrl           String?
   importSourceNormalizedUrl String?
   importSourceCreatorName   String?
+  importSourceCreatorUrl    String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -186,12 +187,27 @@ model Filament {
   materialType String
   notes        String?
   isActive     Boolean  @default(true)
+  fullRollCount Int     @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   productRequirements ProductFilamentRequirement[]
+  partialRolls        FilamentPartialRoll[]
 
   @@index([materialType, isActive])
+}
+
+model FilamentPartialRoll {
+  id            String   @id @default(cuid())
+  filamentId    String
+  gramsRemaining Decimal @db.Decimal(8, 2)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  filament Filament @relation(fields: [filamentId], references: [id], onDelete: Cascade)
+
+  @@index([filamentId, sortOrder])
 }
 
 model ProductFilamentRequirement {
@@ -237,6 +253,8 @@ model Request {
   requesterUserId String
   productId       String
   quantity        Int
+  modelScalePercent    Decimal       @default(100) @db.Decimal(6, 2)
+  filamentScalePercent Decimal       @default(100) @db.Decimal(6, 2)
   notes           String?
   status          RequestStatus @default(SUBMITTED)
   adminNotes      String?
@@ -259,6 +277,8 @@ model QueueItem {
   sourceRequestId String?
   requesterUserId String?
   quantity        Int
+  modelScalePercent    Decimal        @default(100) @db.Decimal(6, 2)
+  filamentScalePercent Decimal        @default(100) @db.Decimal(6, 2)
   status          QueueStatus     @default(PENDING)
   priority        QueuePriority   @default(NORMAL)
   dueDate         DateTime?

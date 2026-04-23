@@ -175,9 +175,10 @@ export async function getFilamentDemandSummary() {
 
       existing.queueItemCount += 1;
       existing.totalUnits += queueItem.quantity;
+      const filamentScaleMultiplier = Number(queueItem.filamentScalePercent ?? 100) / 100;
 
       if (requirement.estimatedGramsPerPrint !== null) {
-        existing.totalEstimatedGrams += Number(requirement.estimatedGramsPerPrint) * queueItem.quantity;
+        existing.totalEstimatedGrams += Number(requirement.estimatedGramsPerPrint) * queueItem.quantity * filamentScaleMultiplier;
       } else {
         existing.missingGramEstimates += queueItem.quantity;
       }

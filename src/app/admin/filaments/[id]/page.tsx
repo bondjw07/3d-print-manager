@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
+import { FilamentStockForm } from "@/components/forms/filament-stock-form";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmSubmitModalButton } from "@/components/ui/confirm-submit-modal-button";
@@ -10,7 +11,12 @@ import { Select } from "@/components/ui/select";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/utils";
-import { deactivateFilamentAction, deleteFilamentAction, updateFilamentAction } from "@/server/actions/portal-actions";
+import {
+  deactivateFilamentAction,
+  deleteFilamentAction,
+  updateFilamentAction,
+  updateFilamentStockAction,
+} from "@/server/actions/portal-actions";
 import { getFilamentById } from "@/server/services/filament-service";
 
 export default async function AdminFilamentDetailPage({
@@ -30,6 +36,8 @@ export default async function AdminFilamentDetailPage({
   const requirements = [...filament.productRequirements].sort((a, b) =>
     a.product.publicName.localeCompare(b.product.publicName),
   );
+  const partialRollGrams = filament.partialRolls.map((roll) => Number(roll.gramsRemaining));
+  const totalPartialGrams = partialRollGrams.reduce((sum, grams) => sum + grams, 0);
 
   return (
     <div className="space-y-4">
@@ -116,10 +124,33 @@ export default async function AdminFilamentDetailPage({
               <p className="text-slate-700">
                 <span className="font-medium text-slate-900">Updated:</span> {formatDateTime(filament.updatedAt)}
               </p>
+              <p className="text-slate-700">
+                <span className="font-medium text-slate-900">Stock:</span> {filament.fullRollCount} full roll
+                {filament.fullRollCount === 1 ? "" : "s"} + {filament.partialRolls.length} partial roll
+                {filament.partialRolls.length === 1 ? "" : "s"} ({totalPartialGrams.toFixed(1)} g partial)
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stock On Hand</CardTitle>
+          <CardDescription>
+            Set how many full rolls you have and add each partial roll with grams remaining.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FilamentStockForm
+            filamentId={filament.id}
+            redirectTo={`/admin/filaments/${filament.id}`}
+            fullRollCount={filament.fullRollCount}
+            partialRollGrams={partialRollGrams}
+            updateAction={updateFilamentStockAction}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -46,6 +46,23 @@ function asDbImportSource(source: ImportedProductData["source"]): ProductImportS
   return source as ProductImportSource;
 }
 
+function applyCreatorOverrides(
+  imported: ImportedProductData,
+  overrides: {
+    creatorNameOverride?: string;
+    creatorUrlOverride?: string;
+  },
+): ImportedProductData {
+  const creatorNameOverride = overrides.creatorNameOverride?.trim();
+  const creatorUrlOverride = overrides.creatorUrlOverride?.trim();
+
+  return {
+    ...imported,
+    creatorName: creatorNameOverride || imported.creatorName,
+    creatorUrl: creatorUrlOverride || imported.creatorUrl,
+  };
+}
+
 function bufferHash(value: ArrayBuffer | Uint8Array | Buffer) {
   const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value;
   return createHash("sha256").update(bytes).digest("hex");
@@ -271,6 +288,7 @@ function buildProductionNotes(imported: ImportedProductData) {
     `Imported URL: ${imported.sourceUrl}`,
     imported.sourceReferenceId ? `Source reference id: ${imported.sourceReferenceId}` : null,
     imported.creatorName ? `Creator: ${imported.creatorName}` : null,
+    imported.creatorUrl ? `Creator URL: ${imported.creatorUrl}` : null,
     `Fetch mode: ${imported.fetchMode}`,
     "Review licensing terms and print settings before publishing.",
   ].filter(Boolean);
@@ -288,7 +306,9 @@ async function backfillImportIdentity(
   if (
     product.importSource === dbSource &&
     product.importSourceReferenceId === (imported.sourceReferenceId ?? null) &&
-    product.importSourceNormalizedUrl === normalizedSourceUrl
+    product.importSourceNormalizedUrl === normalizedSourceUrl &&
+    product.importSourceCreatorName === (imported.creatorName ?? null) &&
+    product.importSourceCreatorUrl === (imported.creatorUrl ?? null)
   ) {
     return product;
   }
@@ -302,6 +322,7 @@ async function backfillImportIdentity(
         importSourceUrl: imported.sourceUrl,
         importSourceNormalizedUrl: normalizedSourceUrl,
         importSourceCreatorName: imported.creatorName ?? null,
+        importSourceCreatorUrl: imported.creatorUrl ?? null,
       },
     });
   } catch (error) {
@@ -409,7 +430,8 @@ function isUnknownImportIdentityArgumentError(error: unknown) {
   return (
     error.message.includes("Unknown argument `importSource`") ||
     error.message.includes("Unknown argument `importSourceReferenceId`") ||
-    error.message.includes("Unknown argument `importSourceNormalizedUrl`")
+    error.message.includes("Unknown argument `importSourceNormalizedUrl`") ||
+    error.message.includes("Unknown argument `importSourceCreatorUrl`")
   );
 }
 
@@ -439,6 +461,7 @@ function mapImportToProductDraft(imported: ImportedProductData, sku: string, nor
     importSourceUrl: imported.sourceUrl,
     importSourceNormalizedUrl: normalizedSourceUrl,
     importSourceCreatorName: imported.creatorName,
+    importSourceCreatorUrl: imported.creatorUrl,
   };
 }
 
@@ -460,6 +483,7 @@ function mapImportToProductUpdate(imported: ImportedProductData, normalizedSourc
     importSourceUrl: imported.sourceUrl,
     importSourceNormalizedUrl: normalizedSourceUrl,
     importSourceCreatorName: imported.creatorName ?? null,
+    importSourceCreatorUrl: imported.creatorUrl ?? null,
   };
 }
 
@@ -491,7 +515,12 @@ async function updateExistingProductFromImport(productId: string, imported: Impo
   }
 }
 
-export async function importProductFromSourceUrl(input: { sourceUrl: string; importImages: boolean }): Promise<{
+export async function importProductFromSourceUrl(input: {
+  sourceUrl: string;
+  importImages: boolean;
+  creatorNameOverride?: string;
+  creatorUrlOverride?: string;
+}): Promise<{
   product: Product;
   importedImageCount: number;
   skippedDuplicateImageCount: number;
@@ -503,13 +532,17 @@ export async function importProductFromSourceUrl(input: { sourceUrl: string; imp
     throw new Error("No importer available for this URL yet. Supported today: Thangs and MyMiniFactory.");
   }
 
-  const imported = await importer.importFromUrl(input.sourceUrl);
+  const imported = applyCreatorOverrides(await importer.importFromUrl(input.sourceUrl), {
+    creatorNameOverride: input.creatorNameOverride,
+    creatorUrlOverride: input.creatorUrlOverride,
+  });
   const normalizedSourceUrl = normalizeImportedSourceUrl(imported.sourceUrl);
 
   const existingProduct = await findExistingImportedProduct(imported, normalizedSourceUrl);
   if (existingProduct) {
+    const enrichedExistingProduct = await backfillImportIdentity(existingProduct, imported, normalizedSourceUrl);
     return {
-      product: existingProduct,
+      product: enrichedExistingProduct,
       importedImageCount: 0,
       skippedDuplicateImageCount: 0,
       source: imported.source,
@@ -560,6 +593,8 @@ export async function refreshProductFromSourceUrl(input: {
   productId: string;
   sourceUrl: string;
   importImages: boolean;
+  creatorNameOverride?: string;
+  creatorUrlOverride?: string;
 }): Promise<{
   product: Product;
   importedImageCount: number;
@@ -580,7 +615,10 @@ export async function refreshProductFromSourceUrl(input: {
     throw new Error("No importer available for this URL yet. Supported today: Thangs and MyMiniFactory.");
   }
 
-  const imported = await importer.importFromUrl(input.sourceUrl);
+  const imported = applyCreatorOverrides(await importer.importFromUrl(input.sourceUrl), {
+    creatorNameOverride: input.creatorNameOverride,
+    creatorUrlOverride: input.creatorUrlOverride,
+  });
   const normalizedSourceUrl = normalizeImportedSourceUrl(imported.sourceUrl);
   const duplicateProduct = await findExistingImportedProduct(imported, normalizedSourceUrl);
 

@@ -7,6 +7,9 @@ export async function getFilaments(includeInactive = true) {
       productRequirements: {
         include: { product: true },
       },
+      partialRolls: {
+        orderBy: { sortOrder: "asc" },
+      },
     },
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
   });
@@ -20,6 +23,9 @@ export async function getFilamentById(filamentId: string) {
         include: {
           product: true,
         },
+      },
+      partialRolls: {
+        orderBy: { sortOrder: "asc" },
       },
     },
   });
@@ -66,6 +72,48 @@ export async function updateFilament(
       notes: data.notes || null,
       isActive: data.isActive,
     },
+  });
+}
+
+export async function updateFilamentStock(
+  filamentId: string,
+  data: {
+    fullRollCount: number;
+    partialRollGrams: number[];
+  },
+) {
+  const normalizedPartialRollGrams = data.partialRollGrams.map((grams) => Math.round(grams * 100) / 100);
+
+  return prisma.$transaction(async (tx) => {
+    await tx.filament.update({
+      where: { id: filamentId },
+      data: {
+        fullRollCount: data.fullRollCount,
+      },
+    });
+
+    await tx.filamentPartialRoll.deleteMany({
+      where: { filamentId },
+    });
+
+    if (normalizedPartialRollGrams.length > 0) {
+      await tx.filamentPartialRoll.createMany({
+        data: normalizedPartialRollGrams.map((gramsRemaining, index) => ({
+          filamentId,
+          gramsRemaining,
+          sortOrder: index,
+        })),
+      });
+    }
+
+    return tx.filament.findUnique({
+      where: { id: filamentId },
+      include: {
+        partialRolls: {
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
   });
 }
 
@@ -118,6 +166,24 @@ export async function deleteFilament(filamentId: string, options?: { force?: boo
   });
 
   return {
+    removedRequirementCount,
+  };
+}
+
+export async function deleteAllFilaments() {
+  let deletedFilamentCount = 0;
+  let removedRequirementCount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const removedRequirements = await tx.productFilamentRequirement.deleteMany({});
+    removedRequirementCount = removedRequirements.count;
+
+    const deletedFilaments = await tx.filament.deleteMany({});
+    deletedFilamentCount = deletedFilaments.count;
+  });
+
+  return {
+    deletedFilamentCount,
     removedRequirementCount,
   };
 }

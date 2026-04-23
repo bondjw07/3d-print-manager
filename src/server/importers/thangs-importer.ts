@@ -73,6 +73,15 @@ function extractCreatorNameFromPath(pathname: string) {
   }
 }
 
+function creatorUrlFromThangsPath(pathname: string) {
+  const creatorSegment = pathname.match(/^\/designer\/([^/]+)/i)?.[1];
+  if (!creatorSegment) {
+    return undefined;
+  }
+
+  return `https://thangs.com/designer/${creatorSegment}`;
+}
+
 function parseAndNormalizeThangsCreatorUrl(sourceUrl: string) {
   let parsed: URL;
 
@@ -300,6 +309,14 @@ function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedP
 
   const creatorName =
     decodeHtml(html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/i)?.[1] ?? "") || undefined;
+  const creatorUrl = (() => {
+    try {
+      const parsed = new URL(sourceUrl);
+      return creatorUrlFromThangsPath(parsed.pathname);
+    } catch {
+      return undefined;
+    }
+  })();
 
   const ogImages = Array.from(html.matchAll(/<meta\s+property="og:image"\s+content="([^"]+)"/gi))
     .map((match) => match[1])
@@ -321,6 +338,7 @@ function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedP
     sourceUrl,
     sourceReferenceId: modelId,
     creatorName,
+    creatorUrl,
     title: cleanTitle,
     shortDescription: shortDescription || undefined,
     fullDescription: description || undefined,
@@ -335,6 +353,14 @@ function parseMarkdown(sourceUrl: string, markdown: string, modelId?: string): I
   const heading = markdown.match(/^#\s+(.+?)\s+-\s+3D model by\s+(.+?)\s+on Thangs$/im);
   const title = heading?.[1]?.trim();
   const creatorName = heading?.[2]?.trim();
+  const creatorUrl = (() => {
+    try {
+      const parsed = new URL(sourceUrl);
+      return creatorUrlFromThangsPath(parsed.pathname);
+    } catch {
+      return undefined;
+    }
+  })();
 
   if (!title) {
     throw new Error("Unable to parse Thangs model title from source.");
@@ -375,6 +401,7 @@ function parseMarkdown(sourceUrl: string, markdown: string, modelId?: string): I
     sourceUrl,
     sourceReferenceId: modelId,
     creatorName: creatorName || undefined,
+    creatorUrl,
     title,
     shortDescription,
     fullDescription,

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
 import {
+  deleteAllFilamentsAction,
   deleteAllProductsAction,
   disconnectMyMiniFactoryOAuthAction,
   updateMyMiniFactoryCredentialsAction,
@@ -176,10 +177,10 @@ export default async function AdminSettingsPage({
             These operations are destructive and cannot be reversed.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border border-border bg-surface-muted p-4">
             <p className="text-sm font-semibold text-rose-800">Delete All Products</p>
-            <p className="mt-1 text-sm text-rose-700">
+            <p className="mt-1 text-sm text-slate-600">
               Permanently deletes all products and removes linked queue items and requests. This action cannot be undone.
             </p>
             <form action={deleteAllProductsAction} className="mt-3">
@@ -193,6 +194,26 @@ export default async function AdminSettingsPage({
                 confirmationInputName="confirmWord"
               >
                 Delete All Products
+              </ConfirmSubmitModalButton>
+            </form>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface-muted p-4">
+            <p className="text-sm font-semibold text-rose-800">Delete All Filaments</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Permanently deletes all filaments and removes linked product filament requirements. This action cannot be undone.
+            </p>
+            <form action={deleteAllFilamentsAction} className="mt-3">
+              <input type="hidden" name="redirectTo" value="/admin/settings" />
+              <ConfirmSubmitModalButton
+                variant="danger"
+                confirmTitle="Delete All Filaments?"
+                confirmMessage="This will permanently delete every filament and remove all linked product filament requirements. This cannot be undone."
+                confirmLabel="Yes, Delete Filaments"
+                confirmationKeyword="delete"
+                confirmationInputName="confirmWord"
+              >
+                Delete All Filaments
               </ConfirmSubmitModalButton>
             </form>
           </div>

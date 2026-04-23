@@ -7,6 +7,7 @@ export type ImportedProductData = {
   sourceUrl: string;
   sourceReferenceId?: string;
   creatorName?: string;
+  creatorUrl?: string;
   title: string;
   shortDescription?: string;
   fullDescription?: string;

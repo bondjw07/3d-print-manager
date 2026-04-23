@@ -78,6 +78,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [pendingCandidates, setPendingCandidates] = useState<string[] | null>(null);
+  const [pendingCreatorName, setPendingCreatorName] = useState<string | null>(null);
+  const [pendingCreatorUrl, setPendingCreatorUrl] = useState<string | null>(null);
   const [isAwaitingImportConfirmation, setIsAwaitingImportConfirmation] = useState(false);
   const [wasStopped, setWasStopped] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
@@ -98,6 +100,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setDuplicateCount(0);
     setFailedCount(0);
     setPendingCandidates(null);
+    setPendingCreatorName(null);
+    setPendingCreatorUrl(null);
     setIsAwaitingImportConfirmation(false);
     setWasStopped(false);
     setIsStopping(false);
@@ -175,6 +179,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setTotalCount(count);
     setCurrentUrl(null);
     setPendingCandidates(null);
+    setPendingCreatorName(null);
+    setPendingCreatorUrl(null);
     setIsAwaitingImportConfirmation(false);
     setWasStopped(false);
     setIsStopping(false);
@@ -184,8 +190,14 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     setLogs((previous) => [entry, ...previous]);
   };
 
-  const importCandidates = async (candidates: string[], shouldImportImages: boolean) => {
+  const importCandidates = async (
+    candidates: string[],
+    shouldImportImages: boolean,
+    creatorMetadata?: { creatorName?: string; creatorUrl?: string },
+  ) => {
     setPendingCandidates(null);
+    setPendingCreatorName(null);
+    setPendingCreatorUrl(null);
     setIsAwaitingImportConfirmation(false);
     setWasStopped(false);
     setIsStopping(false);
@@ -231,6 +243,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
             body: JSON.stringify({
               sourceUrl: normalizedUrl,
               importImages: shouldImportImages,
+              creatorName: creatorMetadata?.creatorName,
+              creatorUrl: creatorMetadata?.creatorUrl,
             }),
             signal: abortController.signal,
           });
@@ -312,7 +326,10 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
     const shouldImportImages = importImages === "true";
 
     if (isCreatorMode && isAwaitingImportConfirmation && pendingCandidates?.length) {
-      await importCandidates(pendingCandidates, shouldImportImages);
+      await importCandidates(pendingCandidates, shouldImportImages, {
+        creatorName: pendingCreatorName ?? undefined,
+        creatorUrl: pendingCreatorUrl ?? undefined,
+      });
       return;
     }
 
@@ -379,6 +396,8 @@ export function BulkProductImportModalForm({ mode = "bulk" }: { mode?: ProductIm
 
         setTotalCount(candidates.length);
         setPendingCandidates(candidates);
+        setPendingCreatorName(discoveryPayload.result.creatorName ?? null);
+        setPendingCreatorUrl(discoveryPayload.result.creatorUrl ?? null);
         setIsAwaitingImportConfirmation(true);
         appendLog({
           url: discoveryPayload.result.creatorUrl,

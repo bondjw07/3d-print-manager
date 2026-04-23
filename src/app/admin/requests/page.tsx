@@ -2,6 +2,7 @@ import Image from "next/image";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { StatusBadge } from "@/components/ui/badge";
@@ -11,8 +12,22 @@ import { formatDateTime } from "@/lib/utils";
 import { humanizeEnum, requestStatusOptions } from "@/lib/domain";
 import {
   bulkManageRequestsAction,
+  updateRequestByAdminAction,
 } from "@/server/actions/portal-actions";
 import { getAllRequests } from "@/server/services/request-service";
+
+function formatScalePercent(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "—";
+  }
+
+  if (Math.abs(numeric - Math.round(numeric)) < 0.001) {
+    return `${Math.round(numeric)}%`;
+  }
+
+  return `${numeric.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
 
 export default async function AdminRequestsPage({
   searchParams,
@@ -48,7 +63,7 @@ export default async function AdminRequestsPage({
           >
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
-              Bulk manage selected requests: update status and notes, convert to queue, or delete.
+              Bulk manage selected requests: update status/notes, convert to queue, or delete. Scale adjustments are per-request below.
             </p>
             <Select name="operation" defaultValue="UPDATE">
               <option value="UPDATE">Update status + notes</option>
@@ -91,10 +106,12 @@ export default async function AdminRequestsPage({
                   <th className="px-2 py-2">Product</th>
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Scale</th>
                   <th className="px-2 py-2">Request Notes</th>
                   <th className="px-2 py-2">Admin Notes</th>
                   <th className="px-2 py-2">Queue Links</th>
                   <th className="px-2 py-2">Submitted</th>
+                  <th className="px-2 py-2">Update</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,6 +152,10 @@ export default async function AdminRequestsPage({
                     <td className="px-2 py-3">
                       <StatusBadge value={request.status} />
                     </td>
+                    <td className="px-2 py-3 text-xs text-slate-600">
+                      <p>Model: {formatScalePercent(request.modelScalePercent)}</p>
+                      <p>Filament: {formatScalePercent(request.filamentScalePercent)}</p>
+                    </td>
                     <td className="max-w-xs px-2 py-3 text-xs text-slate-600">
                       {request.notes ? (
                         <p className="whitespace-pre-wrap break-words">{request.notes}</p>
@@ -155,6 +176,46 @@ export default async function AdminRequestsPage({
                         : "None"}
                     </td>
                     <td className="px-2 py-3 text-xs text-slate-500">{formatDateTime(request.createdAt)}</td>
+                    <td className="px-2 py-3">
+                      <form action={updateRequestByAdminAction} className="grid min-w-56 gap-2">
+                        <input type="hidden" name="requestId" value={request.id} />
+                        <input type="hidden" name="redirectTo" value={redirectTo} />
+                        <Select name="status" defaultValue={request.status}>
+                          {requestStatusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {humanizeEnum(status)}
+                            </option>
+                          ))}
+                        </Select>
+                        <Input
+                          name="modelScalePercent"
+                          type="number"
+                          step="0.01"
+                          min={10}
+                          max={400}
+                          defaultValue={request.modelScalePercent.toString()}
+                          placeholder="Model scale %"
+                        />
+                        <Input
+                          name="filamentScalePercent"
+                          type="number"
+                          step="0.01"
+                          min={1}
+                          max={400}
+                          defaultValue={request.filamentScalePercent.toString()}
+                          placeholder="Filament scale %"
+                        />
+                        <Textarea
+                          name="adminNotes"
+                          defaultValue={request.adminNotes ?? ""}
+                          placeholder="Admin notes"
+                          className="min-h-[70px]"
+                        />
+                        <Button type="submit" size="sm" variant="secondary">
+                          Save
+                        </Button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>
