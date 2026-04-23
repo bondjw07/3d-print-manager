@@ -108,6 +108,28 @@ function parseAndNormalizeThangsCreatorUrl(sourceUrl: string) {
   };
 }
 
+const THANGS_CREATOR_DISCOVERY_MAX_PAGES = 200;
+
+function buildCreatorDiscoveryPageUrl(canonicalCreatorUrl: string, page: number) {
+  if (page <= 1) {
+    return canonicalCreatorUrl;
+  }
+
+  const parsed = new URL(canonicalCreatorUrl);
+  parsed.searchParams.set("page", String(page));
+  return parsed.toString();
+}
+
+function buildCreatorDiscoveryRoots(canonicalCreatorUrl: string) {
+  return unique([
+    canonicalCreatorUrl,
+    `${canonicalCreatorUrl}/3d-models`,
+    `${canonicalCreatorUrl}/3d-model`,
+    `${canonicalCreatorUrl}/free-3d-models`,
+    `${canonicalCreatorUrl}/paid-3d-models`,
+  ]);
+}
+
 function extractModelUrlsFromContent(content: string) {
   const candidates: string[] = [];
   const markdownAbsolutePattern =
@@ -151,42 +173,47 @@ export function isThangsCreatorUrl(sourceUrl: string) {
 
 export async function discoverThangsCreatorModelUrls(input: { creatorUrl: string; maxPages?: number }) {
   const { canonicalUrl, creatorName } = parseAndNormalizeThangsCreatorUrl(input.creatorUrl);
-  const maxPages = Math.min(40, Math.max(1, input.maxPages ?? 12));
+  const maxPages = Math.min(THANGS_CREATOR_DISCOVERY_MAX_PAGES, Math.max(1, input.maxPages ?? 12));
+  const discoveryRoots = buildCreatorDiscoveryRoots(canonicalUrl);
 
   const modelUrls = new Set<string>();
   let pagesScanned = 0;
-  let stalePages = 0;
 
-  for (let page = 1; page <= maxPages; page += 1) {
-    const pageUrl = page === 1 ? canonicalUrl : `${canonicalUrl}/${page}`;
+  for (let rootIndex = 0; rootIndex < discoveryRoots.length; rootIndex += 1) {
+    const discoveryRoot = discoveryRoots[rootIndex];
+    let stalePages = 0;
 
-    let fetchedBody: string;
-    try {
-      const fetched = await fetchMirrorPage(pageUrl);
-      fetchedBody = fetched.body;
-    } catch (error) {
-      if (page === 1) {
-        throw error;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const pageUrl = buildCreatorDiscoveryPageUrl(discoveryRoot, page);
+
+      let fetchedBody: string;
+      try {
+        const fetched = await fetchMirrorPage(pageUrl);
+        fetchedBody = fetched.body;
+      } catch (error) {
+        if (rootIndex === 0 && page === 1) {
+          throw error;
+        }
+        break;
       }
-      break;
-    }
 
-    pagesScanned = page;
-    const beforeCount = modelUrls.size;
-    const foundUrls = extractModelUrlsFromContent(fetchedBody);
+      pagesScanned += 1;
+      const beforeCount = modelUrls.size;
+      const foundUrls = extractModelUrlsFromContent(fetchedBody);
 
-    for (const modelUrl of foundUrls) {
-      modelUrls.add(modelUrl);
-    }
+      for (const modelUrl of foundUrls) {
+        modelUrls.add(modelUrl);
+      }
 
-    if (modelUrls.size === beforeCount) {
-      stalePages += 1;
-    } else {
-      stalePages = 0;
-    }
+      if (modelUrls.size === beforeCount) {
+        stalePages += 1;
+      } else {
+        stalePages = 0;
+      }
 
-    if (stalePages >= 2) {
-      break;
+      if (stalePages >= 2) {
+        break;
+      }
     }
   }
 
@@ -241,6 +268,22 @@ function extractMarkdownImageUrls(markdown: string) {
   return urls;
 }
 
+function cleanMarkdownText(value: string) {
+  return decodeHtml(value)
+    .replace(/!\[[^\]]*]\((?:[^()\s]|\([^)]*\))+\)/g, " ")
+    .replace(/\[([^\]]+)\]\((?:[^()\s]|\([^)]*\))+\)/g, "$1 ")
+    .replace(/\[([^\]]+)\]\((?:[^)]*)/g, "$1 ")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanMarkdownDescription(value: string) {
+  return cleanMarkdownText(value)
+    .replace(/^description\s*[:\-]?\s*/i, "")
+    .trim();
+}
+
 function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedProductData {
   const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)?.[1];
   const ogDescription = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)?.[1];
@@ -270,7 +313,7 @@ function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedP
     [...ogImages, ...inlineImages].filter((imageUrl) => isImportableThangsImage(imageUrl)),
   ).slice(0, 20);
 
-  const description = decodeHtml(ogDescription ?? "").trim();
+  const description = cleanMarkdownDescription(ogDescription ?? "");
   const shortDescription = description.slice(0, 180);
 
   return {
@@ -297,7 +340,7 @@ function parseMarkdown(sourceUrl: string, markdown: string, modelId?: string): I
     throw new Error("Unable to parse Thangs model title from source.");
   }
 
-  const summaryLine = markdown.match(/downloads[^\n]*?·\*\*[^*]+\*\*\s*([^\n]+)/i)?.[1]?.trim();
+  const summaryLineRaw = markdown.match(/downloads[^\n]*?·\*\*[^*]+\*\*\s*([^\n]+)/i)?.[1]?.trim();
 
   const descriptionBlock = markdown
     .split("View license.")[1]
@@ -305,7 +348,9 @@ function parseMarkdown(sourceUrl: string, markdown: string, modelId?: string): I
     ?.replaceAll("* * *", "")
     ?.trim();
 
-  const fullDescription = descriptionBlock?.slice(0, 4000) || summaryLine || title;
+  const summaryLine = summaryLineRaw ? cleanMarkdownText(summaryLineRaw) : "";
+  const cleanedDescription = descriptionBlock ? cleanMarkdownDescription(descriptionBlock) : "";
+  const fullDescription = (cleanedDescription || summaryLine || title).slice(0, 4000);
   const shortDescription = (summaryLine || fullDescription).slice(0, 180);
 
   const categories = unique(
