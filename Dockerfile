@@ -10,7 +10,11 @@ FROM base AS deps
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# Prisma config requires DATABASE_URL even for client generation.
+ENV DATABASE_URL=postgresql://printportal:printportal@localhost:5432/printportal?schema=public
+
+COPY package.json package-lock.json prisma.config.ts ./
+COPY prisma ./prisma
 RUN npm ci
 
 FROM base AS builder
