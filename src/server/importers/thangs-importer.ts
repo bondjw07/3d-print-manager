@@ -293,22 +293,99 @@ function cleanMarkdownDescription(value: string) {
     .trim();
 }
 
+function decodeModelTitleFromSourceUrl(sourceUrl: string) {
+  try {
+    const parsed = new URL(sourceUrl);
+    const pathname = normalizePath(parsed.pathname);
+    const modelSegment = pathname.split("/3d-model/")[1]?.trim();
+    if (!modelSegment) {
+      return null;
+    }
+
+    const withoutId = modelSegment.replace(/-(\d+)(?:$|[/?#].*)/, "").trim();
+    if (!withoutId) {
+      return null;
+    }
+
+    const decoded = decodeURIComponent(withoutId.replace(/\+/g, " ")).trim();
+    return decoded || null;
+  } catch {
+    return null;
+  }
+}
+
+function stripThangsTitleSuffix(value: string) {
+  return value
+    .replace(/\s*-\s*3D model by\s+.+?(?:\s+on\s+Thangs)?$/i, "")
+    .trim();
+}
+
+function parseThangsTitleAndCreatorFromLine(line: string) {
+  const compactLine = line.replace(/\s+/g, " ").trim();
+  if (!compactLine) {
+    return { title: null as string | null, creatorName: undefined as string | undefined };
+  }
+
+  const titleAndCreator = compactLine.match(/^(.+?)\s*-\s*3D model by\s+(.+?)(?:\s+on\s+Thangs)?$/i);
+  if (titleAndCreator) {
+    return {
+      title: titleAndCreator[1]?.trim() || null,
+      creatorName: titleAndCreator[2]?.trim() || undefined,
+    };
+  }
+
+  const cleanedTitle = stripThangsTitleSuffix(compactLine);
+  return {
+    title: cleanedTitle || null,
+    creatorName: undefined,
+  };
+}
+
+function extractThangsTitleAndCreatorFromMarkdown(markdown: string, sourceUrl: string) {
+  const headingLine = markdown.match(/^#\s+(.+)$/im)?.[1]?.trim() ?? "";
+  const titleLine = markdown.match(/^Title:\s+(.+)$/im)?.[1]?.trim() ?? "";
+
+  const headingParsed = parseThangsTitleAndCreatorFromLine(headingLine);
+  if (headingParsed.title) {
+    return headingParsed;
+  }
+
+  const titleParsed = parseThangsTitleAndCreatorFromLine(titleLine);
+  if (titleParsed.title) {
+    return titleParsed;
+  }
+
+  const fallbackTitle = decodeModelTitleFromSourceUrl(sourceUrl);
+  return {
+    title: fallbackTitle,
+    creatorName: undefined,
+  };
+}
+
 function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedProductData {
   const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)?.[1];
   const ogDescription = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)?.[1];
   const titleTag = html.match(/<title>([^<]+)<\/title>/i)?.[1];
 
   const titleCandidate = decodeHtml(ogTitle ?? titleTag ?? "");
-  const cleanTitle = titleCandidate
-    .replace(/\s+-\s+3D model by.+$/i, "")
-    .trim();
+  const cleanTitle = stripThangsTitleSuffix(titleCandidate);
+  const fallbackTitle = decodeModelTitleFromSourceUrl(sourceUrl);
+  const resolvedTitle = cleanTitle || fallbackTitle || "";
 
-  if (!cleanTitle) {
+  if (!resolvedTitle) {
     throw new Error("Unable to parse Thangs title.");
   }
 
-  const creatorName =
+  const creatorNameFromMeta =
     decodeHtml(html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/i)?.[1] ?? "") || undefined;
+  const creatorName = creatorNameFromMeta || (() => {
+    try {
+      const parsed = new URL(sourceUrl);
+      return extractCreatorNameFromPath(parsed.pathname);
+    } catch {
+      return undefined;
+    }
+  })();
   const creatorUrl = (() => {
     try {
       const parsed = new URL(sourceUrl);
@@ -339,7 +416,7 @@ function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedP
     sourceReferenceId: modelId,
     creatorName,
     creatorUrl,
-    title: cleanTitle,
+    title: resolvedTitle,
     shortDescription: shortDescription || undefined,
     fullDescription: description || undefined,
     category: "Imported",
@@ -350,9 +427,9 @@ function parseHtml(sourceUrl: string, html: string, modelId?: string): ImportedP
 }
 
 function parseMarkdown(sourceUrl: string, markdown: string, modelId?: string): ImportedProductData {
-  const heading = markdown.match(/^#\s+(.+?)\s+-\s+3D model by\s+(.+?)\s+on Thangs$/im);
-  const title = heading?.[1]?.trim();
-  const creatorName = heading?.[2]?.trim();
+  const extracted = extractThangsTitleAndCreatorFromMarkdown(markdown, sourceUrl);
+  const title = extracted.title;
+  const creatorName = extracted.creatorName;
   const creatorUrl = (() => {
     try {
       const parsed = new URL(sourceUrl);

@@ -13,18 +13,43 @@ export type SessionUser = {
   isActive: boolean;
 };
 
+const TRANSIENT_DATABASE_ERROR_MESSAGES = [
+  "database system is in recovery mode",
+  "can't reach database server",
+  "connection terminated unexpectedly",
+  "connection refused",
+  "the database is not accepting connections",
+];
+
+function isTransientDatabaseError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return TRANSIENT_DATABASE_ERROR_MESSAGES.some((fragment) => message.includes(fragment));
+}
+
 export async function listMockUsers() {
-  return prisma.user.findMany({
-    where: { isActive: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-    },
-  });
+  try {
+    return await prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+      },
+    });
+  } catch (error) {
+    if (isTransientDatabaseError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -35,16 +60,26 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-    },
-  });
+  let user: SessionUser | null;
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+      },
+    });
+  } catch (error) {
+    if (isTransientDatabaseError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
   if (!user || !user.isActive) {
     return null;
   }
