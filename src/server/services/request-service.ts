@@ -144,10 +144,19 @@ export async function getAllRequests() {
             include: {
               filament: {
                 select: {
+                  id: true,
+                  name: true,
                   spoolCostPerKg: true,
+                  fullRollCount: true,
+                  partialRolls: {
+                    select: {
+                      gramsRemaining: true,
+                    },
+                  },
                 },
               },
             },
+            orderBy: { sortOrder: "asc" },
           },
         },
       },
