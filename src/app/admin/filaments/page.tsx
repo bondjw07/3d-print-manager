@@ -59,7 +59,7 @@ export default async function AdminFilamentsPage({
       return right.requestCount - left.requestCount;
     });
   const impactInsights = purchaseDashboard.insights
-    .filter((insight) => insight.missingGrams > 0 || insight.blockedRequestCount > 0)
+    .filter((insight) => insight.availableGrams <= 0 && (insight.missingGrams > 0 || insight.blockedRequestCount > 0))
     .sort((left, right) => {
       if (right.blockedRequestCount !== left.blockedRequestCount) {
         return right.blockedRequestCount - left.blockedRequestCount;
@@ -154,9 +154,9 @@ export default async function AdminFilamentsPage({
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order By Request Impact</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order By Request Impact (Out of Stock)</p>
                 {impactInsights.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">No request-blocking filament shortages at this time.</p>
+                  <p className="mt-2 text-sm text-slate-600">No fully out-of-stock, request-blocking filaments right now.</p>
                 ) : (
                   <div className="mt-2 space-y-2">
                     {impactInsights.slice(0, 8).map((insight, index) => (
