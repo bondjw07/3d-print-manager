@@ -35,6 +35,29 @@ export async function getQueueItems(filters?: {
   });
 }
 
+export async function getQueueItemByIdForAdmin(queueItemId: string) {
+  return prisma.queueItem.findUnique({
+    where: { id: queueItemId },
+    include: {
+      product: {
+        include: {
+          images: {
+            where: { isPrimary: true },
+            take: 1,
+          },
+        },
+      },
+      requesterUser: true,
+      sourceRequest: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+  });
+}
+
 export async function createQueueItem(input: {
   productId: string;
   sourceType: QueueSourceType;

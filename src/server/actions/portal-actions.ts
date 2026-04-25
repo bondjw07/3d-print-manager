@@ -973,6 +973,7 @@ export async function updateQueueItemAction(formData: FormData) {
 
   await updateQueueItem(queueItemId, parsed.data);
   revalidatePath("/admin/queue");
+  revalidatePath(`/admin/queue/${queueItemId}`);
   redirect(appendStatus(redirectTo, "success", "Queue item updated."));
 }
 

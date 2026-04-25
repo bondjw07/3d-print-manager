@@ -1,3 +1,5 @@
+import Image from "next/image";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +21,7 @@ import {
 } from "@/lib/domain";
 import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
-import { createQueueItemAction, updateQueueItemAction } from "@/server/actions/portal-actions";
+import { createQueueItemAction } from "@/server/actions/portal-actions";
 import { getFilamentDemandSummary, getQueueItems } from "@/server/services/queue-service";
 
 export default async function AdminQueuePage({
@@ -188,61 +190,99 @@ export default async function AdminQueuePage({
               </Button>
             </div>
           </form>
+          <p className="text-xs text-slate-500">Open any queue item to edit notes, priority, and state.</p>
 
           <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-2 py-2">Thumb</th>
                   <th className="px-2 py-2">Product</th>
                   <th className="px-2 py-2">Source</th>
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status / Priority</th>
                   <th className="px-2 py-2">Due</th>
-                  <th className="px-2 py-2">Update</th>
+                  <th className="px-2 py-2">Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {queueItems.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 align-top">
-                    <td className="px-2 py-3 text-sm text-slate-700">
-                      <p className="font-medium text-slate-900">{item.product.publicName}</p>
-                      <p className="text-xs text-slate-500">Created {formatDateTime(item.createdAt)}</p>
-                    </td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{humanizeEnum(item.sourceType)}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{item.quantity}</td>
-                    <td className="px-2 py-3">
-                      <div className="space-y-1">
-                        <StatusBadge value={item.status} />
-                        <StatusBadge value={item.priority} />
-                      </div>
-                    </td>
-                    <td className="px-2 py-3 text-xs text-slate-500">{formatDateTime(item.dueDate)}</td>
-                    <td className="px-2 py-3">
-                      <form action={updateQueueItemAction} className="grid gap-2">
-                        <input type="hidden" name="queueItemId" value={item.id} />
-                        <input type="hidden" name="redirectTo" value="/admin/queue" />
-                        <Select name="status" defaultValue={item.status}>
-                          {queueStatusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {humanizeEnum(status)}
-                            </option>
-                          ))}
-                        </Select>
-                        <Select name="priority" defaultValue={item.priority}>
-                          {queuePriorityOptions.map((priority) => (
-                            <option key={priority} value={priority}>
-                              {humanizeEnum(priority)}
-                            </option>
-                          ))}
-                        </Select>
-                        <Textarea name="notes" defaultValue={item.notes ?? ""} placeholder="Notes" />
-                        <Button type="submit" size="sm" variant="secondary">
-                          Save
-                        </Button>
-                      </form>
+                {queueItems.map((item) => {
+                  const detailHref = `/admin/queue/${item.id}`;
+                  const rowLinkClassName =
+                    "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
+
+                  return (
+                    <tr key={item.id} className="border-b border-slate-100 align-top">
+                      <td className="p-0">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {item.product.images[0] ? (
+                            <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                              <Image
+                                src={item.product.images[0].imagePath}
+                                alt={item.product.publicName}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">
+                              No Image
+                            </div>
+                          )}
+                        </Link>
+                      </td>
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <p className="font-medium text-slate-900">{item.product.publicName}</p>
+                          <p className="text-xs text-slate-500">
+                            Queue Item {item.id.slice(-8)} • Created {formatDateTime(item.createdAt)}
+                          </p>
+                        </Link>
+                      </td>
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <p>{humanizeEnum(item.sourceType)}</p>
+                          {item.sourceReferenceId ? (
+                            <p className="text-xs text-slate-500">Ref {item.sourceReferenceId}</p>
+                          ) : null}
+                          {item.requesterUser ? (
+                            <p className="text-xs text-slate-500">Requester {item.requesterUser.name}</p>
+                          ) : null}
+                        </Link>
+                      </td>
+                      <td className="p-0 text-sm text-slate-700">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {item.quantity}
+                        </Link>
+                      </td>
+                      <td className="p-0">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          <div className="space-y-1">
+                            <StatusBadge value={item.status} />
+                            <StatusBadge value={item.priority} />
+                          </div>
+                        </Link>
+                      </td>
+                      <td className="p-0 text-xs text-slate-500">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {formatDateTime(item.dueDate)}
+                        </Link>
+                      </td>
+                      <td className="p-0 text-xs text-slate-500">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {formatDateTime(item.updatedAt)}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {queueItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-2 py-10 text-center text-sm text-slate-500">
+                      No queue items match the current filters.
                     </td>
                   </tr>
-                ))}
+                ) : null}
               </tbody>
             </Table>
           </TableContainer>
