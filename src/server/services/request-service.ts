@@ -14,6 +14,45 @@ const ADMIN_MODEL_SCALE_MIN_PERCENT = 10;
 const ADMIN_MODEL_SCALE_MAX_PERCENT = 400;
 const ADMIN_FILAMENT_SCALE_MIN_PERCENT = 1;
 const ADMIN_FILAMENT_SCALE_MAX_PERCENT = 400;
+const FULL_FILAMENT_ROLL_GRAMS = 1000;
+const REQUEST_FILAMENT_PLANNING_STATUSES: RequestStatus[] = [
+  RequestStatus.SUBMITTED,
+  RequestStatus.UNDER_REVIEW,
+  RequestStatus.APPROVED,
+  RequestStatus.QUEUED,
+];
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (typeof value === "bigint") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  if (value && typeof value === "object" && "toString" in value && typeof value.toString === "function") {
+    const parsed = Number(value.toString());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function roundToTwo(value: number) {
+  return Math.round(value * 100) / 100;
+}
 
 function assertAdminModelScalePercent(modelScalePercent: number) {
   const normalized = normalizeScalePercent(modelScalePercent);
@@ -65,6 +104,27 @@ export type ProductRequestSummary = {
   totalQuantity: number;
   latestStatus: RequestStatus;
   latestRequestedAt: Date;
+};
+
+export type FilamentRequestPurchaseInsight = {
+  filamentId: string;
+  filamentName: string;
+  materialType: string;
+  colorLabel: string;
+  availableGrams: number;
+  remainingGrams: number;
+  totalRequiredGrams: number;
+  missingGrams: number;
+  requestCount: number;
+  blockedRequestCount: number;
+  requestsWithMissingEstimate: number;
+};
+
+export type FilamentRequestPurchaseDashboard = {
+  openRequestCount: number;
+  requestsWithoutFilamentRequirements: number;
+  requestsWithMissingEstimates: number;
+  insights: FilamentRequestPurchaseInsight[];
 };
 
 export async function getRequestsForUser(userId: string) {
@@ -168,6 +228,162 @@ export async function getAllRequests() {
     ...request,
     ...calculateRequestEstimate(request),
   }));
+}
+
+export async function getFilamentRequestPurchaseDashboard(): Promise<FilamentRequestPurchaseDashboard> {
+  const requests = await prisma.request.findMany({
+    where: {
+      status: {
+        in: REQUEST_FILAMENT_PLANNING_STATUSES,
+      },
+    },
+    select: {
+      id: true,
+      quantity: true,
+      filamentScalePercent: true,
+      createdAt: true,
+      product: {
+        select: {
+          filamentRequirements: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              filamentId: true,
+              estimatedGramsPerPrint: true,
+              filament: {
+                select: {
+                  id: true,
+                  name: true,
+                  materialType: true,
+                  colorLabel: true,
+                  fullRollCount: true,
+                  partialRolls: {
+                    select: {
+                      gramsRemaining: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+
+  const requestsWithMissingEstimateIds = new Set<string>();
+  let requestsWithoutFilamentRequirements = 0;
+  const insightMap = new Map<
+    string,
+    {
+      filamentId: string;
+      filamentName: string;
+      materialType: string;
+      colorLabel: string;
+      availableGrams: number;
+      remainingGrams: number;
+      totalRequiredGrams: number;
+      missingGrams: number;
+      requestIds: Set<string>;
+      blockedRequestIds: Set<string>;
+      unknownEstimateRequestIds: Set<string>;
+    }
+  >();
+
+  for (const request of requests) {
+    const requirements = request.product.filamentRequirements;
+    if (requirements.length === 0) {
+      requestsWithoutFilamentRequirements += 1;
+      continue;
+    }
+
+    const filamentScaleMultiplier = Math.max(0, (toFiniteNumber(request.filamentScalePercent) ?? 100) / 100);
+
+    for (const requirement of requirements) {
+      const partialRollGrams = requirement.filament.partialRolls.reduce(
+        (sum, roll) => sum + (toFiniteNumber(roll.gramsRemaining) ?? 0),
+        0,
+      );
+      const availableGrams = requirement.filament.fullRollCount * FULL_FILAMENT_ROLL_GRAMS + partialRollGrams;
+      const insight = insightMap.get(requirement.filamentId) ?? {
+        filamentId: requirement.filamentId,
+        filamentName: requirement.filament.name,
+        materialType: requirement.filament.materialType,
+        colorLabel: requirement.filament.colorLabel,
+        availableGrams,
+        remainingGrams: availableGrams,
+        totalRequiredGrams: 0,
+        missingGrams: 0,
+        requestIds: new Set<string>(),
+        blockedRequestIds: new Set<string>(),
+        unknownEstimateRequestIds: new Set<string>(),
+      };
+
+      const estimatedGramsPerPrint = toFiniteNumber(requirement.estimatedGramsPerPrint);
+      if (estimatedGramsPerPrint === null || estimatedGramsPerPrint <= 0) {
+        insight.unknownEstimateRequestIds.add(request.id);
+        requestsWithMissingEstimateIds.add(request.id);
+        insightMap.set(requirement.filamentId, insight);
+        continue;
+      }
+
+      const requiredGrams = estimatedGramsPerPrint * request.quantity * filamentScaleMultiplier;
+      insight.requestIds.add(request.id);
+      insight.totalRequiredGrams += requiredGrams;
+
+      if (insight.remainingGrams + 0.001 >= requiredGrams) {
+        insight.remainingGrams = Math.max(0, insight.remainingGrams - requiredGrams);
+      } else {
+        const shortfallGrams = requiredGrams - insight.remainingGrams;
+        insight.missingGrams += shortfallGrams;
+        insight.remainingGrams = 0;
+        insight.blockedRequestIds.add(request.id);
+      }
+
+      insightMap.set(requirement.filamentId, insight);
+    }
+  }
+
+  const insights = Array.from(insightMap.values())
+    .map((insight): FilamentRequestPurchaseInsight => ({
+      filamentId: insight.filamentId,
+      filamentName: insight.filamentName,
+      materialType: insight.materialType,
+      colorLabel: insight.colorLabel,
+      availableGrams: roundToTwo(insight.availableGrams),
+      remainingGrams: roundToTwo(insight.remainingGrams),
+      totalRequiredGrams: roundToTwo(insight.totalRequiredGrams),
+      missingGrams: roundToTwo(insight.missingGrams),
+      requestCount: insight.requestIds.size,
+      blockedRequestCount: insight.blockedRequestIds.size,
+      requestsWithMissingEstimate: insight.unknownEstimateRequestIds.size,
+    }))
+    .sort((left, right) => {
+      if (right.blockedRequestCount !== left.blockedRequestCount) {
+        return right.blockedRequestCount - left.blockedRequestCount;
+      }
+
+      if (right.missingGrams !== left.missingGrams) {
+        return right.missingGrams - left.missingGrams;
+      }
+
+      if (right.requestCount !== left.requestCount) {
+        return right.requestCount - left.requestCount;
+      }
+
+      if (right.totalRequiredGrams !== left.totalRequiredGrams) {
+        return right.totalRequiredGrams - left.totalRequiredGrams;
+      }
+
+      return left.filamentName.localeCompare(right.filamentName);
+    });
+
+  return {
+    openRequestCount: requests.length,
+    requestsWithoutFilamentRequirements,
+    requestsWithMissingEstimates: requestsWithMissingEstimateIds.size,
+    insights,
+  };
 }
 
 export async function getRequestByIdForAdmin(requestId: string) {

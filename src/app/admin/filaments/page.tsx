@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MetricCard } from "@/components/layout/metric-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,26 @@ import {
   createFilamentAction,
 } from "@/server/actions/portal-actions";
 import { getFilaments } from "@/server/services/filament-service";
+import { getFilamentRequestPurchaseDashboard } from "@/server/services/request-service";
+
+function formatGrams(value: number) {
+  if (Math.abs(value - Math.round(value)) < 0.001) {
+    return `${Math.round(value)} g`;
+  }
+
+  return `${value.toFixed(1).replace(/\.0$/, "")} g`;
+}
 
 export default async function AdminFilamentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string }>;
 }) {
-  const [params, allFilaments] = await Promise.all([searchParams, getFilaments(true)]);
+  const [params, allFilaments, purchaseDashboard] = await Promise.all([
+    searchParams,
+    getFilaments(true),
+    getFilamentRequestPurchaseDashboard(),
+  ]);
   const query = params.q?.trim().toLowerCase() ?? "";
   const redirectTo = params.q?.trim()
     ? `/admin/filaments?q=${encodeURIComponent(params.q.trim())}`
@@ -33,6 +47,33 @@ export default async function AdminFilamentsPage({
         return haystack.includes(query);
       })
     : allFilaments;
+  const shortageInsights = purchaseDashboard.insights
+    .filter((insight) => insight.missingGrams > 0)
+    .sort((left, right) => {
+      if (right.missingGrams !== left.missingGrams) {
+        return right.missingGrams - left.missingGrams;
+      }
+      if (right.blockedRequestCount !== left.blockedRequestCount) {
+        return right.blockedRequestCount - left.blockedRequestCount;
+      }
+      return right.requestCount - left.requestCount;
+    });
+  const impactInsights = purchaseDashboard.insights
+    .filter((insight) => insight.missingGrams > 0 || insight.blockedRequestCount > 0)
+    .sort((left, right) => {
+      if (right.blockedRequestCount !== left.blockedRequestCount) {
+        return right.blockedRequestCount - left.blockedRequestCount;
+      }
+      if (right.requestCount !== left.requestCount) {
+        return right.requestCount - left.requestCount;
+      }
+      if (right.missingGrams !== left.missingGrams) {
+        return right.missingGrams - left.missingGrams;
+      }
+      return left.filamentName.localeCompare(right.filamentName);
+    });
+  const totalMissingGrams = shortageInsights.reduce((sum, insight) => sum + insight.missingGrams, 0);
+  const topImpact = impactInsights[0];
 
   return (
     <div className="space-y-4">
@@ -50,6 +91,114 @@ export default async function AdminFilamentsPage({
       {params.success ? (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p>
       ) : null}
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle>Request Filament Purchase Planner</CardTitle>
+            <CardDescription>
+              Prioritized shortages across active request statuses (submitted, under review, approved, and queued).
+            </CardDescription>
+          </div>
+          <Link href="/admin/requests?stock=needs_stock">
+            <Button variant="secondary" size="sm">
+              View Blocked Requests
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="Open Requests"
+              value={purchaseDashboard.openRequestCount}
+              helper="Included in purchase planning"
+            />
+            <MetricCard label="Filaments Short" value={shortageInsights.length} helper="Need additional grams" />
+            <MetricCard label="Total Shortage" value={formatGrams(totalMissingGrams)} helper="Across all filaments" />
+            <MetricCard
+              label="Unknown Gram Requests"
+              value={purchaseDashboard.requestsWithMissingEstimates}
+              helper="Need filament estimate cleanup"
+            />
+          </div>
+
+          {purchaseDashboard.openRequestCount === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-5 text-center text-sm text-slate-500">
+              No active requests to plan against right now.
+            </p>
+          ) : (
+            <div className="grid gap-3 xl:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order By Quantity Shortage</p>
+                {shortageInsights.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">No filament shortages detected for active requests.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {shortageInsights.slice(0, 8).map((insight) => (
+                      <div key={insight.filamentId} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-slate-900">{insight.filamentName}</p>
+                          <p className="text-sm font-semibold text-rose-700">{formatGrams(insight.missingGrams)} short</p>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          {insight.colorLabel} • {insight.materialType}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Blocks {insight.blockedRequestCount} request{insight.blockedRequestCount === 1 ? "" : "s"} • Used in{" "}
+                          {insight.requestCount} request{insight.requestCount === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order By Request Impact</p>
+                {impactInsights.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">No request-blocking filament shortages at this time.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {impactInsights.slice(0, 8).map((insight, index) => (
+                      <div key={insight.filamentId} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-slate-900">
+                            #{index + 1} {insight.filamentName}
+                          </p>
+                          <p className="text-xs font-medium text-slate-600">{formatGrams(insight.missingGrams)} short</p>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Unlocks {insight.blockedRequestCount} blocked request{insight.blockedRequestCount === 1 ? "" : "s"} •
+                          Needed in {insight.requestCount} total request{insight.requestCount === 1 ? "" : "s"}
+                        </p>
+                        {insight.requestsWithMissingEstimate > 0 ? (
+                          <p className="text-xs text-amber-700">
+                            {insight.requestsWithMissingEstimate} request
+                            {insight.requestsWithMissingEstimate === 1 ? "" : "s"} missing gram estimate.
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {purchaseDashboard.requestsWithoutFilamentRequirements > 0 ? (
+            <p className="text-xs text-amber-700">
+              {purchaseDashboard.requestsWithoutFilamentRequirements} request
+              {purchaseDashboard.requestsWithoutFilamentRequirements === 1 ? "" : "s"} do not have filament requirements configured yet.
+            </p>
+          ) : null}
+          {topImpact ? (
+            <p className="text-xs text-slate-500">
+              Top impact purchase right now: <span className="font-medium text-slate-700">{topImpact.filamentName}</span> (
+              {topImpact.blockedRequestCount} blocked request{topImpact.blockedRequestCount === 1 ? "" : "s"}).
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
