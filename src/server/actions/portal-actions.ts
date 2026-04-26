@@ -25,6 +25,11 @@ import {
   updateListing,
   createListing,
 } from "@/server/services/listing-service";
+import {
+  createManagedCreator,
+  deleteManagedCreator,
+  updateManagedCreator,
+} from "@/server/services/creator-service";
 import { simulateMarketplaceEvent } from "@/server/services/marketplace-event-service";
 import { updateInventory } from "@/server/services/inventory-service";
 import { createQueueItem, updateQueueItem } from "@/server/services/queue-service";
@@ -79,6 +84,8 @@ import {
   requestBulkActionSchema,
   requestCreateSchema,
   requestUserUpdateSchema,
+  managedCreatorDeleteSchema,
+  managedCreatorSchema,
   settingsSchema,
   userAdminUpdateSchema,
 } from "@/server/validation/schemas";
@@ -339,13 +346,20 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
     status: formData.get("status"),
     isPublic: formData.get("isPublic"),
     isRequestable: formData.get("isRequestable"),
+    creatorSelection: formData.get("creatorSelection"),
   });
 
   if (!parsed.success) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   }
 
-  const updatedProducts = await bulkUpdateProductControls(parsed.data);
+  let updatedProducts = 0;
+  try {
+    updatedProducts = await bulkUpdateProductControls(parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to bulk update products.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
   revalidatePath("/admin/products");
   revalidatePath("/admin/listings");
   revalidatePath("/catalog");
@@ -1008,6 +1022,70 @@ export async function updateSettingsAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
+}
+
+export async function createManagedCreatorAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = managedCreatorSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await createManagedCreator(parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create creator.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", "Creator created."));
+}
+
+export async function updateManagedCreatorAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = managedCreatorSchema.safeParse(Object.fromEntries(formData));
+  const creatorId = String(formData.get("creatorId") ?? "").trim();
+  if (!creatorId || !parsed.success) {
+    redirect(appendStatus(redirectTo, "error", parsed.success ? "Creator id is required." : firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await updateManagedCreator(creatorId, parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to update creator.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", "Creator updated."));
+}
+
+export async function deleteManagedCreatorAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = managedCreatorDeleteSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  try {
+    await deleteManagedCreator(parsed.data.creatorId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete creator.";
+    redirect(appendStatus(redirectTo, "error", message));
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", "Creator deleted."));
 }
 
 export async function deleteAllProductsAction(formData: FormData) {

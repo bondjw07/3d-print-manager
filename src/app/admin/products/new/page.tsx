@@ -4,13 +4,14 @@ import { ProductForm } from "@/components/forms/product-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createProductAction } from "@/server/actions/portal-actions";
+import { getManagedCreators } from "@/server/services/creator-service";
 
 export default async function NewProductPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const params = await searchParams;
+  const [params, creators] = await Promise.all([searchParams, getManagedCreators()]);
 
   return (
     <div className="space-y-4">
@@ -34,7 +35,12 @@ export default async function NewProductPage({
             <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{params.error}</p>
           ) : null}
 
-          <ProductForm action={createProductAction} redirectTo="/admin/products/new" submitLabel="Create Product" />
+          <ProductForm
+            creators={creators}
+            action={createProductAction}
+            redirectTo="/admin/products/new"
+            submitLabel="Create Product"
+          />
         </CardContent>
       </Card>
     </div>

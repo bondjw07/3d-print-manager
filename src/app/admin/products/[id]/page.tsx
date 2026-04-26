@@ -25,6 +25,7 @@ import {
   setPrimaryImageAction,
   updateProductAction,
 } from "@/server/actions/portal-actions";
+import { getManagedCreators } from "@/server/services/creator-service";
 import { getProductByIdForAdmin } from "@/server/services/product-service";
 
 export default async function ProductDetailAdminPage({
@@ -41,10 +42,19 @@ export default async function ProductDetailAdminPage({
     notFound();
   }
 
-  const filaments = await prisma.filament.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-  });
+  const [filaments, creators] = await Promise.all([
+    prisma.filament.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    getManagedCreators(),
+  ]);
+
+  const normalizedProductCreatorName = product.importSourceCreatorName?.trim().toLowerCase();
+  const currentManagedCreatorId =
+    normalizedProductCreatorName
+      ? creators.find((creator) => creator.name.trim().toLowerCase() === normalizedProductCreatorName)?.id ?? null
+      : null;
 
   const sourceUrlFromNotes = product.productionNotes
     ?.split("\n")
@@ -83,6 +93,8 @@ export default async function ProductDetailAdminPage({
           <CardContent>
             <ProductForm
               product={product}
+              creators={creators}
+              currentManagedCreatorId={currentManagedCreatorId}
               action={updateProductAction}
               redirectTo={`/admin/products/${product.id}`}
               submitLabel="Save Product"

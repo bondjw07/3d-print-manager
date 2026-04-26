@@ -1,4 +1,4 @@
-import type { Product } from "@/generated/prisma/client";
+import type { Creator, Product } from "@/generated/prisma/client";
 import {
   inventoryModeOptions,
   productStatusOptions,
@@ -11,15 +11,25 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function ProductForm({
   product,
+  creators,
+  currentManagedCreatorId,
   action,
   redirectTo,
   submitLabel,
 }: {
   product?: Product;
+  creators: Creator[];
+  currentManagedCreatorId?: string | null;
   action: (formData: FormData) => void | Promise<void>;
   redirectTo: string;
   submitLabel: string;
 }) {
+  const hasUnmanagedCurrentCreator =
+    Boolean(product?.importSourceCreatorName?.trim()) && !currentManagedCreatorId;
+  const creatorSelectDefault = product
+    ? currentManagedCreatorId ?? (hasUnmanagedCurrentCreator ? "__UNCHANGED__" : "")
+    : "";
+
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       {product ? <input type="hidden" name="productId" value={product.id} /> : null}
@@ -63,6 +73,24 @@ export function ProductForm({
           Tags (comma-separated)
         </label>
         <Input id="tags" name="tags" defaultValue={product?.tags?.join(", ") ?? ""} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="creatorId">
+          Creator
+        </label>
+        <Select id="creatorId" name="creatorId" defaultValue={creatorSelectDefault}>
+          <option value="">No creator</option>
+          {hasUnmanagedCurrentCreator ? (
+            <option value="__UNCHANGED__">Keep current creator: {product?.importSourceCreatorName}</option>
+          ) : null}
+          {creators.map((creator) => (
+            <option key={creator.id} value={creator.id}>
+              {creator.name}
+            </option>
+          ))}
+        </Select>
+        <p className="mt-1 text-xs text-slate-500">Managed in Admin Settings.</p>
       </div>
 
       <div>

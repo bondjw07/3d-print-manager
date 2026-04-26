@@ -17,8 +17,12 @@ import { getAllRequests } from "@/server/services/request-service";
 
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 const stockFilterOptions = ["all", "printable", "needs_stock", "unknown"] as const;
+const ALL_STATUS_FILTER = "all";
+const ALL_CREATOR_FILTER = "all";
+const NO_CREATOR_FILTER = "__none__";
 
 type StockFilterOption = (typeof stockFilterOptions)[number];
+type StatusFilterOption = (typeof requestStatusOptions)[number] | typeof ALL_STATUS_FILTER;
 type RequestStockState = "PRINTABLE" | "INSUFFICIENT_STOCK" | "UNKNOWN";
 type AdminRequest = Awaited<ReturnType<typeof getAllRequests>>[number];
 
@@ -81,6 +85,52 @@ function parseStockFilter(value: string | undefined): StockFilterOption {
   }
 
   return stockFilterOptions.includes(value as StockFilterOption) ? (value as StockFilterOption) : "all";
+}
+
+function parseStatusFilter(value: string | undefined): StatusFilterOption {
+  if (!value || value === ALL_STATUS_FILTER) {
+    return ALL_STATUS_FILTER;
+  }
+
+  return requestStatusOptions.includes(value as (typeof requestStatusOptions)[number])
+    ? (value as (typeof requestStatusOptions)[number])
+    : ALL_STATUS_FILTER;
+}
+
+function normalizeCreatorName(value: string | null | undefined) {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+function parseCreatorFilter(value: string | undefined, creatorOptions: string[]) {
+  if (!value || value === ALL_CREATOR_FILTER) {
+    return ALL_CREATOR_FILTER;
+  }
+
+  if (value === NO_CREATOR_FILTER) {
+    return NO_CREATOR_FILTER;
+  }
+
+  return creatorOptions.includes(value) ? value : ALL_CREATOR_FILTER;
+}
+
+function buildRequestsFilterUrl(input: {
+  stockFilter: StockFilterOption;
+  statusFilter: StatusFilterOption;
+  creatorFilter: string;
+}) {
+  const query = new URLSearchParams();
+  if (input.stockFilter !== "all") {
+    query.set("stock", input.stockFilter);
+  }
+  if (input.statusFilter !== ALL_STATUS_FILTER) {
+    query.set("status", input.statusFilter);
+  }
+  if (input.creatorFilter !== ALL_CREATOR_FILTER) {
+    query.set("creator", input.creatorFilter);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/admin/requests?${queryString}` : "/admin/requests";
 }
 
 function stockBadgeLabel(state: RequestStockState) {
@@ -181,10 +231,27 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
 export default async function AdminRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string | string[]; success?: string | string[]; stock?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    success?: string | string[];
+    stock?: string | string[];
+    status?: string | string[];
+    creator?: string | string[];
+  }>;
 }) {
   const [params, requests] = await Promise.all([searchParams, getAllRequests()]);
+
+  const creatorOptions = Array.from(
+    new Set(
+      requests
+        .map((request) => normalizeCreatorName(request.product.importSourceCreatorName))
+        .filter((creatorName) => creatorName.length > 0),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
   const stockFilter = parseStockFilter(firstSearchParamValue(params.stock));
+  const statusFilter = parseStatusFilter(firstSearchParamValue(params.status));
+  const creatorFilter = parseCreatorFilter(firstSearchParamValue(params.creator), creatorOptions);
   const errorMessage = firstSearchParamValue(params.error);
   const successMessage = firstSearchParamValue(params.success);
 
@@ -206,22 +273,40 @@ export default async function AdminRequestsPage({
   );
 
   const filteredRequests = requestsWithStock.filter((item) => {
-    if (stockFilter === "all") {
-      return true;
+    if (stockFilter !== "all") {
+      if (stockFilter === "printable" && item.stockSummary.state !== "PRINTABLE") {
+        return false;
+      }
+
+      if (stockFilter === "needs_stock" && item.stockSummary.state !== "INSUFFICIENT_STOCK") {
+        return false;
+      }
+
+      if (stockFilter === "unknown" && item.stockSummary.state !== "UNKNOWN") {
+        return false;
+      }
     }
 
-    if (stockFilter === "printable") {
-      return item.stockSummary.state === "PRINTABLE";
+    if (statusFilter !== ALL_STATUS_FILTER && item.request.status !== statusFilter) {
+      return false;
     }
 
-    if (stockFilter === "needs_stock") {
-      return item.stockSummary.state === "INSUFFICIENT_STOCK";
+    const creatorName = normalizeCreatorName(item.request.product.importSourceCreatorName);
+    if (creatorFilter === NO_CREATOR_FILTER && creatorName) {
+      return false;
+    }
+    if (creatorFilter !== ALL_CREATOR_FILTER && creatorFilter !== NO_CREATOR_FILTER && creatorName !== creatorFilter) {
+      return false;
     }
 
-    return item.stockSummary.state === "UNKNOWN";
+    return true;
   });
 
-  const redirectTo = stockFilter === "all" ? "/admin/requests" : `/admin/requests?stock=${stockFilter}`;
+  const redirectTo = buildRequestsFilterUrl({
+    stockFilter,
+    statusFilter,
+    creatorFilter,
+  });
 
   return (
     <div className="space-y-4">
@@ -245,7 +330,7 @@ export default async function AdminRequestsPage({
           <form
             action="/admin/requests"
             method="get"
-            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[240px_auto_auto] sm:items-center"
+            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[220px_220px_240px_auto_auto] lg:items-center"
           >
             <Select name="stock" defaultValue={stockFilter}>
               <option value="all">All requests</option>
@@ -253,11 +338,35 @@ export default async function AdminRequestsPage({
               <option value="needs_stock">Need more stock</option>
               <option value="unknown">Unknown stock fit</option>
             </Select>
+            <Select name="status" defaultValue={statusFilter}>
+              <option value={ALL_STATUS_FILTER}>All statuses</option>
+              {requestStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {humanizeEnum(status)}
+                </option>
+              ))}
+            </Select>
+            <Select name="creator" defaultValue={creatorFilter}>
+              <option value={ALL_CREATOR_FILTER}>All creators</option>
+              <option value={NO_CREATOR_FILTER}>No creator set</option>
+              {creatorOptions.map((creator) => (
+                <option key={creator} value={creator}>
+                  {creator}
+                </option>
+              ))}
+            </Select>
             <Button type="submit" variant="secondary">
-              Apply Filter
+              Apply Filters
             </Button>
-            <p className="text-xs text-slate-500">
-              {stockCounts.PRINTABLE} printable • {stockCounts.INSUFFICIENT_STOCK} need stock • {stockCounts.UNKNOWN} unknown
+            <Link
+              href="/admin/requests"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              Clear
+            </Link>
+            <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-5">
+              Showing {filteredRequests.length} of {requestsWithStock.length} requests • {stockCounts.PRINTABLE} printable •{" "}
+              {stockCounts.INSUFFICIENT_STOCK} need stock • {stockCounts.UNKNOWN} unknown
             </p>
           </form>
 
@@ -452,7 +561,7 @@ export default async function AdminRequestsPage({
                 {filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan={13} className="px-2 py-10 text-center text-sm text-slate-500">
-                      No requests found for this stock filter.
+                      No requests found for the selected filters.
                     </td>
                   </tr>
                 ) : null}

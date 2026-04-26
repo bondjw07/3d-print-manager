@@ -6,12 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
 import {
+  createManagedCreatorAction,
+  deleteManagedCreatorAction,
   deleteAllFilamentsAction,
   deleteAllProductsAction,
   disconnectMyMiniFactoryOAuthAction,
+  updateManagedCreatorAction,
   updateMyMiniFactoryCredentialsAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
+import { getManagedCreators } from "@/server/services/creator-service";
 import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
 import { getSettings } from "@/server/services/settings-service";
 
@@ -20,10 +24,11 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, settings, myMiniFactoryStatus] = await Promise.all([
+  const [params, settings, myMiniFactoryStatus, creators] = await Promise.all([
     searchParams,
     getSettings(),
     getMyMiniFactoryIntegrationStatus(),
+    getManagedCreators(),
   ]);
 
   return (
@@ -74,6 +79,52 @@ export default async function AdminSettingsPage({
           <p>Marketplace provider: mocked adapter behind interface with publish/update/remove/refresh actions.</p>
           <p>AI provider: mocked listing content interface stub available for future model integration.</p>
           <p>Storage provider: local filesystem adapter for product images, abstracted for future object storage.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed Creators</CardTitle>
+          <CardDescription>
+            Maintain a shared creator list for product forms and bulk updates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form action={createManagedCreatorAction} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <Input name="name" placeholder="Creator name (e.g. Loot Lab)" required />
+            <Input name="url" type="url" placeholder="Creator URL (optional)" />
+            <Button type="submit">Add Creator</Button>
+          </form>
+
+          {creators.length === 0 ? (
+            <p className="text-sm text-slate-500">No creators added yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {creators.map((creator) => (
+                <div key={creator.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <form action={updateManagedCreatorAction} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                    <input type="hidden" name="redirectTo" value="/admin/settings" />
+                    <input type="hidden" name="creatorId" value={creator.id} />
+                    <Input name="name" defaultValue={creator.name} required />
+                    <Input name="url" type="url" defaultValue={creator.url ?? ""} placeholder="Creator URL (optional)" />
+                    <Button type="submit" variant="secondary">
+                      Save
+                    </Button>
+                    <Button
+                      type="submit"
+                      formAction={deleteManagedCreatorAction}
+                      formNoValidate
+                      variant="ghost"
+                      className="text-rose-700 hover:text-rose-800"
+                    >
+                      Delete
+                    </Button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -9,7 +9,8 @@ import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox"
 import { Table, TableContainer } from "@/components/ui/table";
 import { ProductImportsDropdown } from "@/components/forms/product-imports-dropdown";
 import { formatDateTime } from "@/lib/utils";
-import { humanizeEnum, productStatusOptions } from "@/lib/domain";
+import { humanizeEnum } from "@/lib/domain";
+import { getManagedCreators } from "@/server/services/creator-service";
 import { getAdminProducts } from "@/server/services/product-service";
 import {
   bulkUpdateProductControlsAction,
@@ -23,7 +24,7 @@ export default async function AdminProductsPage({
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const redirectTo = q ? `/admin/products?q=${encodeURIComponent(q)}` : "/admin/products";
-  const products = await getAdminProducts(q || undefined);
+  const [products, creators] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators()]);
 
   return (
     <div className="space-y-4">
@@ -70,28 +71,78 @@ export default async function AdminProductsPage({
           <form
             id="bulk-product-update-form"
             action={bulkUpdateProductControlsAction}
-            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_180px_auto]"
+            className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
           >
             <input type="hidden" name="redirectTo" value={redirectTo} />
-            <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
-              Bulk update selected products: status, visibility, and requestability.
-            </p>
-            <Select name="status" defaultValue="ACTIVE">
-              {productStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {humanizeEnum(status)}
-                </option>
-              ))}
-            </Select>
-            <Select name="isPublic" defaultValue="true">
-              <option value="true">Public</option>
-              <option value="false">Private</option>
-            </Select>
-            <Select name="isRequestable" defaultValue="false">
-              <option value="true">Requestable</option>
-              <option value="false">Not requestable</option>
-            </Select>
-            <Button type="submit">Apply to Selected</Button>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="max-w-3xl text-sm text-slate-700">
+                Bulk update selected products. Choose only the fields you want to change and leave the rest set to keep current.
+              </p>
+              <Button type="submit" className="shrink-0">
+                Apply To Selected
+              </Button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkStatus">
+                  Status
+                </label>
+                <Select id="bulkStatus" name="status" defaultValue="UNCHANGED">
+                  <option value="UNCHANGED">Keep current status</option>
+                  <option value="ACTIVE">{humanizeEnum("ACTIVE")}</option>
+                  <option value="ARCHIVED">{humanizeEnum("ARCHIVED")}</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkVisibility">
+                  Visibility
+                </label>
+                <Select id="bulkVisibility" name="isPublic" defaultValue="UNCHANGED">
+                  <option value="UNCHANGED">Keep visibility</option>
+                  <option value="true">Set public</option>
+                  <option value="false">Set private</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkRequestable">
+                  Requestable
+                </label>
+                <Select id="bulkRequestable" name="isRequestable" defaultValue="UNCHANGED">
+                  <option value="UNCHANGED">Keep requestable</option>
+                  <option value="true">Set requestable</option>
+                  <option value="false">Set not requestable</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkCreatorSelection">
+                  Creator
+                </label>
+                <Select id="bulkCreatorSelection" name="creatorSelection" defaultValue="UNCHANGED">
+                  <option value="UNCHANGED">Keep creator</option>
+                  <option value="CLEAR">Clear creator</option>
+                  {creators.length > 0 ? <option disabled>----------</option> : null}
+                  {creators.length === 0 ? (
+                    <option value="" disabled>
+                      No managed creators yet
+                    </option>
+                  ) : null}
+                  {creators.map((creator) => (
+                    <option key={creator.id} value={creator.id}>
+                      Set to {creator.name}
+                    </option>
+                  ))}
+                </Select>
+                {creators.length === 0 ? (
+                  <p className="mt-1 text-xs text-amber-700">Add creators in Settings to bulk assign creator values.</p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">Choose a managed creator to apply across selected products.</p>
+                )}
+              </div>
+            </div>
           </form>
 
           <TableContainer>

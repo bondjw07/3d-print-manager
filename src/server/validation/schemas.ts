@@ -15,8 +15,34 @@ import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
 import { z } from "zod";
 
 const boolLike = z.union([z.literal("true"), z.literal("false")]).transform((value) => value === "true");
+const boolLikeOrUnchanged = z
+  .union([z.literal("UNCHANGED"), z.literal("true"), z.literal("false")])
+  .transform((value) => (value === "UNCHANGED" ? undefined : value === "true"));
 const editableProductStatuses = [ProductStatus.ACTIVE, ProductStatus.ARCHIVED] as const;
 const editableProductStatusSchema = z.enum(editableProductStatuses);
+const editableProductStatusOrUnchangedSchema = z
+  .union([z.literal("UNCHANGED"), editableProductStatusSchema])
+  .transform((value) => (value === "UNCHANGED" ? undefined : value));
+
+const productFormCreatorSelection = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (trimmed === "__UNCHANGED__") {
+      return undefined;
+    }
+
+    return trimmed;
+  },
+  z.string().min(1).nullable().optional(),
+);
 
 const optionalNumber = z.preprocess(
   (value) => {
@@ -70,6 +96,7 @@ export const productFormSchema = z.object({
   fullDescription: z.string().trim().min(10),
   category: z.string().trim().min(2),
   tags: z.string().trim().optional().default(""),
+  creatorId: productFormCreatorSelection,
   sku: z.string().trim().min(3),
   status: editableProductStatusSchema,
   isPublic: boolLike,
@@ -85,16 +112,50 @@ export const productFormSchema = z.object({
   printNotes: z.string().trim().optional(),
 });
 
-export const productBulkUpdateSchema = z.object({
-  productIds: z.array(z.string().trim().min(1)).min(1, "Select at least one product."),
-  status: editableProductStatusSchema,
-  isPublic: boolLike,
-  isRequestable: boolLike,
-});
+export const productBulkUpdateSchema = z
+  .object({
+    productIds: z.array(z.string().trim().min(1)).min(1, "Select at least one product."),
+    status: editableProductStatusOrUnchangedSchema,
+    isPublic: boolLikeOrUnchanged,
+    isRequestable: boolLikeOrUnchanged,
+    creatorSelection: z.preprocess(
+      (value) => {
+        if (typeof value !== "string") {
+          return "UNCHANGED";
+        }
+
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : "UNCHANGED";
+      },
+      z.string().min(1),
+    ),
+  })
+  .superRefine((value, context) => {
+    const hasControlChange =
+      value.status !== undefined || value.isPublic !== undefined || value.isRequestable !== undefined;
+    const hasCreatorChange = value.creatorSelection !== "UNCHANGED";
+
+    if (!hasControlChange && !hasCreatorChange) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["status"],
+        message: "Choose at least one field to update.",
+      });
+    }
+  });
 
 export const productBulkImportSchema = z.object({
   sourceUrls: z.string().trim().min(1, "Paste at least one URL."),
   importImages: boolLike.default(true),
+});
+
+export const managedCreatorSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  url: z.url().optional().or(z.literal("")),
+});
+
+export const managedCreatorDeleteSchema = z.object({
+  creatorId: z.string().trim().min(1),
 });
 
 export const filamentFormSchema = z.object({
