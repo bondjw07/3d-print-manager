@@ -251,3 +251,26 @@ Minimal Postgres dump example:
 ```bash
 docker exec print-portal-postgres pg_dump -U printportal printportal > printportal-backup.sql
 ```
+
+### 8) Repair Missing Product Images (If Needed)
+
+If image paths exist in the database but files are missing on disk (for example after running with an incorrect upload volume mapping), run the repair script from the app container:
+
+Dry run (no changes):
+
+```bash
+docker compose --env-file .env.production -f docker-compose.unraid.yml exec app npm run images:repair-missing
+```
+
+Apply fixes:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.unraid.yml exec app npm run images:repair-missing -- --apply
+```
+
+What it does:
+
+- finds product image records whose files are missing under `/app/uploads/products` and `/app/public/uploads/products`
+- removes broken image rows
+- restores images from `importSourceUrl` (or `Imported URL` notes) when available
+- reassigns a valid primary image when needed
