@@ -23,6 +23,13 @@ export async function getQueueItems(filters?: {
             where: { isPrimary: true },
             take: 1,
           },
+          listings: {
+            where: { externalUrl: { not: null } },
+            select: {
+              externalUrl: true,
+            },
+            orderBy: { updatedAt: "desc" },
+          },
           filamentRequirements: {
             include: { filament: true },
           },
@@ -44,6 +51,13 @@ export async function getQueueItemByIdForAdmin(queueItemId: string) {
           images: {
             where: { isPrimary: true },
             take: 1,
+          },
+          listings: {
+            where: { externalUrl: { not: null } },
+            select: {
+              externalUrl: true,
+            },
+            orderBy: { updatedAt: "desc" },
           },
         },
       },

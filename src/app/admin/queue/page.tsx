@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ import {
   queueSourceTypeOptions,
   queueStatusOptions,
 } from "@/lib/domain";
+import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { createQueueItemAction } from "@/server/actions/portal-actions";
@@ -199,6 +201,7 @@ export default async function AdminQueuePage({
                   <th className="px-2 py-2">Thumb</th>
                   <th className="px-2 py-2">Product</th>
                   <th className="px-2 py-2">Source</th>
+                  <th className="px-2 py-2">Queue Source</th>
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status / Priority</th>
                   <th className="px-2 py-2">Due</th>
@@ -208,6 +211,7 @@ export default async function AdminQueuePage({
               <tbody>
                 {queueItems.map((item) => {
                   const detailHref = `/admin/queue/${item.id}`;
+                  const productExternalUrl = getProductExternalUrl(item.product);
                   const rowLinkClassName =
                     "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
 
@@ -238,6 +242,22 @@ export default async function AdminQueuePage({
                             Queue Item {item.id.slice(-8)} • Created {formatDateTime(item.createdAt)}
                           </p>
                         </Link>
+                      </td>
+                      <td className="px-2 py-3 text-center">
+                        {productExternalUrl ? (
+                          <a
+                            href={productExternalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={productExternalUrl}
+                            aria-label={`Open external URL for ${item.product.publicName}`}
+                            className="inline-flex rounded-md p-1 text-slate-500 transition-colors hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
                       <td className="p-0 text-sm text-slate-700">
                         <Link href={detailHref} className={rowLinkClassName}>
@@ -278,7 +298,7 @@ export default async function AdminQueuePage({
                 })}
                 {queueItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-2 py-10 text-center text-sm text-slate-500">
                       No queue items match the current filters.
                     </td>
                   </tr>

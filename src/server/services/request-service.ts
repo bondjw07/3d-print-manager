@@ -200,6 +200,13 @@ export async function getAllRequests() {
             where: { isPrimary: true },
             take: 1,
           },
+          listings: {
+            where: { externalUrl: { not: null } },
+            select: {
+              externalUrl: true,
+            },
+            orderBy: { updatedAt: "desc" },
+          },
           filamentRequirements: {
             include: {
               filament: {
@@ -396,6 +403,13 @@ export async function getRequestByIdForAdmin(requestId: string) {
           images: {
             where: { isPrimary: true },
             take: 1,
+          },
+          listings: {
+            where: { externalUrl: { not: null } },
+            select: {
+              externalUrl: true,
+            },
+            orderBy: { updatedAt: "desc" },
           },
           filamentRequirements: {
             include: {

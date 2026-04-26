@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { humanizeEnum, queuePriorityOptions, queueStatusOptions } from "@/lib/domain";
+import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatDateTime } from "@/lib/utils";
 import { updateQueueItemAction } from "@/server/actions/portal-actions";
 import { getQueueItemByIdForAdmin } from "@/server/services/queue-service";
@@ -27,6 +29,7 @@ export default async function AdminQueueItemDetailPage({
   }
 
   const redirectTo = `/admin/queue/${queueItem.id}`;
+  const productExternalUrl = getProductExternalUrl(queueItem.product);
 
   return (
     <div className="space-y-4">
@@ -118,6 +121,23 @@ export default async function AdminQueueItemDetailPage({
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Source Reference</p>
                   <p className="mt-1 text-sm text-slate-900">{queueItem.sourceReferenceId || "None"}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 sm:col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Source URL</p>
+                  {productExternalUrl ? (
+                    <a
+                      href={productExternalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={productExternalUrl}
+                      className="mt-1 inline-flex max-w-full items-center gap-1 text-sm text-sky-700 underline"
+                    >
+                      <span className="truncate">{productExternalUrl}</span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    </a>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">None</p>
+                  )}
                 </div>
               </div>
 

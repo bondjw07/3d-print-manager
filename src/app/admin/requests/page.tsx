@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox"
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { humanizeEnum, requestStatusOptions } from "@/lib/domain";
 import { bulkManageRequestsAction } from "@/server/actions/portal-actions";
@@ -307,6 +309,7 @@ export default async function AdminRequestsPage({
                   <th className="px-2 py-2">Thumb</th>
                   <th className="px-2 py-2">Requester</th>
                   <th className="px-2 py-2">Product</th>
+                  <th className="px-2 py-2">Source</th>
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2">Scale</th>
@@ -320,6 +323,7 @@ export default async function AdminRequestsPage({
               <tbody>
                 {filteredRequests.map(({ request, stockSummary }) => {
                   const detailHref = `/admin/requests/${request.id}`;
+                  const productExternalUrl = getProductExternalUrl(request.product);
                   const rowLinkClassName =
                     "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
 
@@ -366,6 +370,23 @@ export default async function AdminRequestsPage({
                         <Link href={detailHref} className={rowLinkClassName}>
                           {request.product.publicName}
                         </Link>
+                      </td>
+
+                      <td className="px-2 py-3 text-center">
+                        {productExternalUrl ? (
+                          <a
+                            href={productExternalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={productExternalUrl}
+                            aria-label={`Open external URL for ${request.product.publicName}`}
+                            className="inline-flex rounded-md p-1 text-slate-500 transition-colors hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
 
                       <td className="p-0 text-sm text-slate-700">
@@ -430,7 +451,7 @@ export default async function AdminRequestsPage({
                 })}
                 {filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={13} className="px-2 py-10 text-center text-sm text-slate-500">
                       No requests found for this stock filter.
                     </td>
                   </tr>
