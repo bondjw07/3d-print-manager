@@ -74,6 +74,7 @@ export default async function AdminFilamentsPage({
     });
   const totalMissingGrams = shortageInsights.reduce((sum, insight) => sum + insight.missingGrams, 0);
   const topImpact = impactInsights[0];
+  const purchaseInsightListClass = "mt-2 h-80 space-y-2 overflow-y-auto pr-1";
 
   return (
     <div className="space-y-4">
@@ -133,11 +134,16 @@ export default async function AdminFilamentsPage({
                 {shortageInsights.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">No filament shortages detected for active requests.</p>
                 ) : (
-                  <div className="mt-2 space-y-2">
-                    {shortageInsights.slice(0, 8).map((insight) => (
+                  <div className={purchaseInsightListClass}>
+                    {shortageInsights.map((insight) => (
                       <div key={insight.filamentId} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-900">{insight.filamentName}</p>
+                          <Link
+                            href={`/admin/filaments/${insight.filamentId}`}
+                            className="text-sm font-medium text-slate-900 hover:underline"
+                          >
+                            {insight.filamentName}
+                          </Link>
                           <p className="text-sm font-semibold text-rose-700">{formatGrams(insight.missingGrams)} short</p>
                         </div>
                         <p className="text-xs text-slate-600">
@@ -158,12 +164,18 @@ export default async function AdminFilamentsPage({
                 {impactInsights.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">No fully out-of-stock, request-blocking filaments right now.</p>
                 ) : (
-                  <div className="mt-2 space-y-2">
-                    {impactInsights.slice(0, 8).map((insight, index) => (
+                  <div className={purchaseInsightListClass}>
+                    {impactInsights.map((insight, index) => (
                       <div key={insight.filamentId} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-medium text-slate-900">
-                            #{index + 1} {insight.filamentName}
+                            <span className="text-slate-500">#{index + 1}</span>{" "}
+                            <Link
+                              href={`/admin/filaments/${insight.filamentId}`}
+                              className="text-slate-900 hover:underline"
+                            >
+                              {insight.filamentName}
+                            </Link>
                           </p>
                           <p className="text-xs font-medium text-slate-600">{formatGrams(insight.missingGrams)} short</p>
                         </div>
