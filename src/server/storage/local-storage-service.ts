@@ -1,4 +1,4 @@
-import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ProductImageStorage, SavedProductImage } from "./storage-service";
@@ -27,6 +27,17 @@ export class LocalProductImageStorage implements ProductImageStorage {
     const tempFilePath = `${finalFilePath}.tmp-${randomUUID()}`;
     await writeFile(tempFilePath, Buffer.from(bytes));
     await rename(tempFilePath, finalFilePath);
+
+    // Keep both configured upload locations in sync so existing deployments
+    // using either `/uploads` or `/public/uploads` continue to work.
+    for (const mirrorPath of resolveProductImageDiskPaths(imagePath).slice(1)) {
+      try {
+        await mkdir(path.dirname(mirrorPath), { recursive: true });
+        await copyFile(finalFilePath, mirrorPath);
+      } catch {
+        // Best-effort mirror; primary write already succeeded.
+      }
+    }
 
     return {
       fileName,

@@ -10,7 +10,7 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
 - Tailwind CSS
 - Zod validation
 - Local credential auth, plus mocked marketplace provider and AI listing provider behind service interfaces
-- Local filesystem image storage abstraction (`/public/uploads/products`)
+- Local filesystem image storage abstraction (`/uploads/products`, mirrored to `/public/uploads/products`)
 
 ## What This Build Includes
 
@@ -147,7 +147,7 @@ Imports are deduped by source + source product ID when available, with URL fallb
 ## Notes
 
 - This MVP is intentionally mocked for marketplace/AI while preserving clean extension points.
-- Product images include seeded placeholders under `public/seed-images` plus runtime uploads under `public/uploads/products`.
+- Product images include seeded placeholders under `public/seed-images` plus runtime uploads under `uploads/products` (mirrored to `public/uploads/products` for backward compatibility).
 
 ## Deployment (Unraid, Self-Contained)
 
@@ -191,6 +191,8 @@ Copy these files there:
 
 - `docker-compose.unraid.yml`
 - `.env.production.example` (rename to `.env.production`)
+
+The compose file mounts `print_portal_uploads` at both `/app/uploads` and `/app/public/uploads` so image storage stays compatible across older and newer app versions.
 
 Edit `.env.production`:
 
