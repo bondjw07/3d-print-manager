@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
+import { ProductPhotoCarousel } from "@/components/admin/product-photo-carousel";
 import { ProductForm } from "@/components/forms/product-form";
 import { ImageUploadForm } from "@/components/forms/image-upload-form";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,12 @@ export default async function ProductDetailAdminPage({
   const linkedRequestCount = product._count.requests;
   const linkedQueueCount = product._count.queueItems;
   const hasLinkedWork = linkedRequestCount > 0 || linkedQueueCount > 0;
+  const carouselImages = product.images.map((image) => ({
+    id: image.id,
+    imagePath: image.imagePath,
+    altText: image.altText,
+    isPrimary: image.isPrimary,
+  }));
 
   return (
     <div className="space-y-4">
@@ -112,6 +119,16 @@ export default async function ProductDetailAdminPage({
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Photo Preview</CardTitle>
+              <CardDescription>Cycle through all product photos from the primary image.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProductPhotoCarousel images={carouselImages} productName={product.publicName} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Inventory</CardTitle>
