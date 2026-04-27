@@ -13,8 +13,10 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/utils";
 import { humanizeEnum } from "@/lib/domain";
+import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
 import { prisma } from "@/lib/prisma";
 import {
+  addProductInventoryAction,
   addProductFilamentRequirementAction,
   deleteProductAction,
   deleteProductImageAction,
@@ -65,6 +67,7 @@ export default async function ProductDetailAdminPage({
   const filamentRequirements = [...product.filamentRequirements].sort((a, b) =>
     a.filament.name.localeCompare(b.filament.name),
   );
+  const inventoryRecord = product.inventoryRecord;
   const linkedRequestCount = product._count.requests;
   const linkedQueueCount = product._count.queueItems;
   const hasLinkedWork = linkedRequestCount > 0 || linkedQueueCount > 0;
@@ -103,6 +106,65 @@ export default async function ProductDetailAdminPage({
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Inventory</CardTitle>
+              <CardDescription>Add newly printed stock to on-hand inventory.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                <p>
+                  On hand <span className="font-semibold text-slate-900">{inventoryRecord?.onHand ?? 0}</span>
+                </p>
+                <p>
+                  Available <span className="font-semibold text-slate-900">{inventoryRecord?.available ?? 0}</span>
+                </p>
+                <p>
+                  Reserved <span className="font-semibold text-slate-900">{inventoryRecord?.reserved ?? 0}</span>
+                </p>
+                <p>
+                  Committed <span className="font-semibold text-slate-900">{inventoryRecord?.committed ?? 0}</span>
+                </p>
+              </div>
+              <form action={addProductInventoryAction} className="grid gap-3 sm:grid-cols-2">
+                <input type="hidden" name="productId" value={product.id} />
+                <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
+                <div>
+                  <label
+                    className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
+                    htmlFor="inventoryQuantity"
+                  >
+                    Quantity To Add
+                  </label>
+                  <Input id="inventoryQuantity" name="quantity" type="number" min={1} defaultValue={1} required />
+                </div>
+                <div>
+                  <label
+                    className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
+                    htmlFor="inventoryPrintedScalePercent"
+                  >
+                    Printed Scale (%)
+                  </label>
+                  <Input
+                    id="inventoryPrintedScalePercent"
+                    name="printedScalePercent"
+                    type="number"
+                    min={10}
+                    max={400}
+                    step="0.01"
+                    defaultValue={DEFAULT_SCALE_PERCENT}
+                    required
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Button type="submit" variant="secondary">
+                    Add To Inventory
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Lifecycle</CardTitle>

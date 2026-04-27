@@ -51,6 +51,37 @@ export async function updateInventory(
   });
 }
 
+export async function addInventoryStock(
+  productId: string,
+  input: {
+    quantity: number;
+  },
+) {
+  const existing = await prisma.inventoryRecord.findUnique({
+    where: { productId },
+  });
+
+  if (!existing) {
+    return prisma.inventoryRecord.create({
+      data: {
+        productId,
+        onHand: input.quantity,
+        reserved: 0,
+        committed: 0,
+        available: input.quantity,
+      },
+    });
+  }
+
+  return prisma.inventoryRecord.update({
+    where: { id: existing.id },
+    data: {
+      onHand: { increment: input.quantity },
+      available: { increment: input.quantity },
+    },
+  });
+}
+
 export async function getLowStockItems() {
   const records = await prisma.inventoryRecord.findMany({
     where: {

@@ -31,7 +31,7 @@ import {
   updateManagedCreator,
 } from "@/server/services/creator-service";
 import { simulateMarketplaceEvent } from "@/server/services/marketplace-event-service";
-import { updateInventory } from "@/server/services/inventory-service";
+import { addInventoryStock, updateInventory } from "@/server/services/inventory-service";
 import { createQueueItem, updateQueueItem } from "@/server/services/queue-service";
 import {
   bulkConvertRequestsToQueue,
@@ -68,6 +68,7 @@ import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
   filamentStockUpdateSchema,
+  inventoryStockAddSchema,
   inventoryUpdateSchema,
   listingBulkProductUpdateSchema,
   listingFormSchema,
@@ -1006,6 +1007,35 @@ export async function updateInventoryAction(formData: FormData) {
   revalidatePath("/admin/inventory");
   revalidatePath("/admin");
   redirect(appendStatus(redirectTo, "success", "Inventory updated."));
+}
+
+export async function addProductInventoryAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const productId = String(formData.get("productId") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? `/admin/products/${productId}`);
+  const parsed = inventoryStockAddSchema.safeParse(Object.fromEntries(formData));
+
+  if (!productId || !parsed.success) {
+    redirect(appendStatus(redirectTo, "error", parsed.success ? "Product id missing." : firstIssueMessage(parsed.error)));
+  }
+
+  await addInventoryStock(productId, {
+    quantity: parsed.data.quantity,
+  });
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin");
+
+  const scaleLabel =
+    Number.isInteger(parsed.data.printedScalePercent)
+      ? parsed.data.printedScalePercent.toFixed(0)
+      : parsed.data.printedScalePercent.toString();
+  const productLabel = parsed.data.quantity === 1 ? "product" : "products";
+  const message = `Added ${parsed.data.quantity} ${productLabel} to inventory at ${scaleLabel}% scale.`;
+  redirect(appendStatus(redirectTo, "success", message));
 }
 
 export async function updateSettingsAction(formData: FormData) {

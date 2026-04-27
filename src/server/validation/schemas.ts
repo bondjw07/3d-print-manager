@@ -289,6 +289,11 @@ export const inventoryUpdateSchema = z.object({
   ),
 });
 
+export const inventoryStockAddSchema = z.object({
+  quantity: z.coerce.number().int().min(1).max(100000),
+  printedScalePercent: z.coerce.number().min(10).max(400).default(DEFAULT_SCALE_PERCENT),
+});
+
 export const settingsSchema = z.object({
   defaultMarketplace: z.nativeEnum(MarketplaceType),
 });
