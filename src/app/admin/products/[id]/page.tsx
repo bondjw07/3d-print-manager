@@ -25,6 +25,7 @@ import {
   refreshProductFromUrlAction,
   setProductStatusAction,
   setPrimaryImageAction,
+  updateInventoryAction,
   updateProductAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
@@ -68,6 +69,11 @@ export default async function ProductDetailAdminPage({
     a.filament.name.localeCompare(b.filament.name),
   );
   const inventoryRecord = product.inventoryRecord;
+  const onHand = inventoryRecord?.onHand ?? 0;
+  const available = inventoryRecord?.available ?? 0;
+  const reserved = inventoryRecord?.reserved ?? 0;
+  const committed = inventoryRecord?.committed ?? 0;
+  const reorderThreshold = inventoryRecord?.reorderThreshold ?? "";
   const linkedRequestCount = product._count.requests;
   const linkedQueueCount = product._count.queueItems;
   const hasLinkedWork = linkedRequestCount > 0 || linkedQueueCount > 0;
@@ -109,21 +115,21 @@ export default async function ProductDetailAdminPage({
           <Card>
             <CardHeader>
               <CardTitle>Inventory</CardTitle>
-              <CardDescription>Add newly printed stock to on-hand inventory.</CardDescription>
+              <CardDescription>Add newly printed stock and update inventory controls for this product.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
                 <p>
-                  On hand <span className="font-semibold text-slate-900">{inventoryRecord?.onHand ?? 0}</span>
+                  On hand <span className="font-semibold text-slate-900">{onHand}</span>
                 </p>
                 <p>
-                  Available <span className="font-semibold text-slate-900">{inventoryRecord?.available ?? 0}</span>
+                  Available <span className="font-semibold text-slate-900">{available}</span>
                 </p>
                 <p>
-                  Reserved <span className="font-semibold text-slate-900">{inventoryRecord?.reserved ?? 0}</span>
+                  Reserved <span className="font-semibold text-slate-900">{reserved}</span>
                 </p>
                 <p>
-                  Committed <span className="font-semibold text-slate-900">{inventoryRecord?.committed ?? 0}</span>
+                  Committed <span className="font-semibold text-slate-900">{committed}</span>
                 </p>
               </div>
               <form action={addProductInventoryAction} className="grid gap-3 sm:grid-cols-2">
@@ -162,6 +168,54 @@ export default async function ProductDetailAdminPage({
                   </Button>
                 </div>
               </form>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Edit Inventory Fields</p>
+                <form action={updateInventoryAction} className="grid gap-2 sm:grid-cols-4">
+                  <input type="hidden" name="productId" value={product.id} />
+                  <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
+                  <div>
+                    <label
+                      className="mb-1 flex h-10 items-end text-xs font-medium uppercase tracking-wide leading-tight text-slate-500"
+                      htmlFor="inventoryOnHand"
+                    >
+                      On Hand
+                    </label>
+                    <Input id="inventoryOnHand" name="onHand" type="number" defaultValue={onHand} />
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 flex h-10 items-end text-xs font-medium uppercase tracking-wide leading-tight text-slate-500"
+                      htmlFor="inventoryReserved"
+                    >
+                      Reserved
+                    </label>
+                    <Input id="inventoryReserved" name="reserved" type="number" defaultValue={reserved} />
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 flex h-10 items-end text-xs font-medium uppercase tracking-wide leading-tight text-slate-500"
+                      htmlFor="inventoryCommitted"
+                    >
+                      Committed
+                    </label>
+                    <Input id="inventoryCommitted" name="committed" type="number" defaultValue={committed} />
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 flex h-10 items-end text-xs font-medium uppercase tracking-wide leading-tight text-slate-500"
+                      htmlFor="inventoryReorderThreshold"
+                    >
+                      Reorder Threshold
+                    </label>
+                    <Input id="inventoryReorderThreshold" name="reorderThreshold" type="number" defaultValue={reorderThreshold} />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <Button type="submit" variant="secondary">
+                      Save Inventory Fields
+                    </Button>
+                  </div>
+                </form>
+              </div>
             </CardContent>
           </Card>
 

@@ -4,8 +4,15 @@ export function recalculateInventoryAvailable(onHand: number, reserved: number, 
   return onHand - reserved - committed;
 }
 
-export async function getInventory() {
+export async function getInventory(options?: { inStockOnly?: boolean }) {
   return prisma.inventoryRecord.findMany({
+    where: options?.inStockOnly
+      ? {
+          onHand: {
+            gt: 0,
+          },
+        }
+      : undefined,
     include: {
       product: {
         include: {
