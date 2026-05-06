@@ -17,6 +17,7 @@ import {
 } from "@/server/actions/portal-actions";
 import { getFilaments } from "@/server/services/filament-service";
 import { getFilamentRequestPurchaseDashboard } from "@/server/services/request-service";
+import { getFilamentDemandSummary } from "@/server/services/queue-service";
 
 function formatGrams(value: number) {
   if (Math.abs(value - Math.round(value)) < 0.001) {
@@ -31,10 +32,11 @@ export default async function AdminFilamentsPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string }>;
 }) {
-  const [params, allFilaments, purchaseDashboard] = await Promise.all([
+  const [params, allFilaments, purchaseDashboard, queueFilamentDemandSummary] = await Promise.all([
     searchParams,
     getFilaments(true),
     getFilamentRequestPurchaseDashboard(),
+    getFilamentDemandSummary(),
   ]);
   const query = params.q?.trim().toLowerCase() ?? "";
   const redirectTo = params.q?.trim()
@@ -209,6 +211,37 @@ export default async function AdminFilamentsPage({
               {topImpact.blockedRequestCount} blocked request{topImpact.blockedRequestCount === 1 ? "" : "s"}).
             </p>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Filament Demand Summary</CardTitle>
+          <CardDescription>Aggregated filament requirements across active queue work.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {queueFilamentDemandSummary.length === 0 ? (
+            <p className="text-sm text-slate-500">No active filament demand in queue.</p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {queueFilamentDemandSummary.map((item) => (
+                <div key={item.filamentId} className="rounded-xl border border-slate-200 px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <Link href={`/admin/filaments/${item.filamentId}`} className="text-sm font-medium text-slate-900 hover:underline">
+                      {item.filamentName}
+                    </Link>
+                    <p className="text-xs text-slate-500">{item.materialType}</p>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-600">
+                    <span>{item.totalEstimatedGrams.toFixed(1)}g estimated</span>
+                    <span>{item.totalUnits} units</span>
+                    <span>{item.queueItemCount} queue items</span>
+                    {item.missingGramEstimates > 0 ? <span>{item.missingGramEstimates} units w/o gram estimate</span> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
