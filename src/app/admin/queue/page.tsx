@@ -61,6 +61,18 @@ function stageBadgeClassName(stageKey: QueueStageKey) {
   return stageToneClassName[stage?.tone ?? "neutral"];
 }
 
+function priorityRowClassName(priority: QueuePriority) {
+  if (priority === "URGENT") {
+    return "queue-priority-highlight queue-priority-urgent";
+  }
+
+  if (priority === "HIGH") {
+    return "queue-priority-highlight";
+  }
+
+  return "";
+}
+
 function buildQueueFilterUrl(filters: {
   stage?: QueueStageKey;
   status?: QueueStatus;
@@ -339,7 +351,7 @@ export default async function AdminQueuePage({
                           <th className="px-2 py-2">Qty</th>
                           <th className="px-2 py-2">Total Weight (g)</th>
                           <th className="px-2 py-2">Est Time</th>
-                          <th className="px-2 py-2">Stage / Status / Priority</th>
+                          <th className="px-2 py-2">Status</th>
                           <th className="px-2 py-2">Due</th>
                           <th className="px-2 py-2">Updated</th>
                         </tr>
@@ -352,7 +364,10 @@ export default async function AdminQueuePage({
                             "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
 
                           return (
-                            <tr key={item.id} className="border-b border-slate-100 align-top">
+                            <tr
+                              key={item.id}
+                              className={`border-b border-slate-100 align-top ${priorityRowClassName(item.priority)}`}
+                            >
                               <td className="p-0">
                                 <Link href={detailHref} className={rowLinkClassName}>
                                   {item.product.images[0] ? (
@@ -431,11 +446,7 @@ export default async function AdminQueuePage({
                               <td className="p-0">
                                 <Link href={detailHref} className={rowLinkClassName}>
                                   <div className="space-y-1">
-                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${stageBadgeClassName(stage.key)}`}>
-                                      {stage.label}
-                                    </span>
                                     <StatusBadge value={item.status} />
-                                    <StatusBadge value={item.priority} />
                                   </div>
                                 </Link>
                               </td>

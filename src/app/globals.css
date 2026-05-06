@@ -158,3 +158,19 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
 html[data-theme="dark"] .hover\:text-slate-900:hover {
   color: #f1f5f9 !important;
 }
+
+.queue-priority-highlight {
+  background-color: rgba(254, 226, 226, 0.55);
+}
+
+.queue-priority-urgent {
+  background-color: rgba(254, 202, 202, 0.72);
+}
+
+html[data-theme="dark"] .queue-priority-highlight {
+  background-color: rgba(127, 29, 29, 0.2) !important;
+}
+
+html[data-theme="dark"] .queue-priority-urgent {
+  background-color: rgba(127, 29, 29, 0.3) !important;
+}

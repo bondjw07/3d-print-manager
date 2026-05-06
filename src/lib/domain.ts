@@ -18,6 +18,34 @@ export const userRoleLabels: Record<UserRole, string> = {
 
 export const productStatusOptions = [ProductStatus.ACTIVE, ProductStatus.ARCHIVED] as const;
 export const requestStatusOptions = Object.values(RequestStatus);
+export const requestStageDefinitions = [
+  {
+    key: "INTAKE",
+    label: "Intake",
+    statuses: [RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW],
+    tone: "info",
+  },
+  {
+    key: "READY",
+    label: "Ready",
+    statuses: [RequestStatus.APPROVED],
+    tone: "success",
+  },
+  {
+    key: "HANDOFF",
+    label: "Handoff",
+    statuses: [RequestStatus.QUEUED],
+    tone: "warning",
+  },
+  {
+    key: "CLOSED_EXCEPTION",
+    label: "Closed/Exception",
+    statuses: [RequestStatus.COMPLETED, RequestStatus.REJECTED, RequestStatus.CANCELLED],
+    tone: "neutral",
+  },
+] as const;
+export type RequestStageKey = (typeof requestStageDefinitions)[number]["key"];
+export const requestStageOptions = requestStageDefinitions.map((definition) => definition.key) as RequestStageKey[];
 export const queueStatusOptions = Object.values(QueueStatus);
 export const queuePriorityOptions = Object.values(QueuePriority);
 export const queueSourceTypeOptions = Object.values(QueueSourceType);
@@ -57,9 +85,16 @@ export const syncStatusOptions = Object.values(SyncStatus);
 const queueStatusToStageMap = new Map<QueueStatus, QueueStageKey>(
   queueStageDefinitions.flatMap((definition) => definition.statuses.map((status) => [status, definition.key] as const)),
 );
+const requestStatusToStageMap = new Map<RequestStatus, RequestStageKey>(
+  requestStageDefinitions.flatMap((definition) => definition.statuses.map((status) => [status, definition.key] as const)),
+);
 
 export function getQueueStageForStatus(status: QueueStatus): QueueStageKey {
   return queueStatusToStageMap.get(status) ?? "CLOSED_EXCEPTION";
+}
+
+export function getRequestStageForStatus(status: RequestStatus): RequestStageKey {
+  return requestStatusToStageMap.get(status) ?? "CLOSED_EXCEPTION";
 }
 
 export const statusTone: Record<string, string> = {

@@ -990,9 +990,15 @@ export async function updateQueueItemAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", parsed.success ? "Queue item id missing." : firstIssueMessage(parsed.error)));
   }
 
-  await updateQueueItem(queueItemId, parsed.data);
+  const updatedQueueItem = await updateQueueItem(queueItemId, parsed.data);
   revalidatePath("/admin/queue");
   revalidatePath(`/admin/queue/${queueItemId}`);
+  if (updatedQueueItem.sourceRequestId) {
+    revalidatePath("/admin/requests");
+    revalidatePath(`/admin/requests/${updatedQueueItem.sourceRequestId}`);
+    revalidatePath("/requests");
+    revalidatePath("/my-requests");
+  }
   redirect(appendStatus(redirectTo, "success", "Queue item updated."));
 }
 

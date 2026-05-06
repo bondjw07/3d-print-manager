@@ -1,4 +1,5 @@
 import {
+  RequestStatus,
   QueueStatus,
   type QueuePriority,
   type QueueSourceType,
@@ -106,13 +107,31 @@ export async function updateQueueItem(
     notes?: string;
   },
 ) {
-  return prisma.queueItem.update({
-    where: { id: queueItemId },
-    data: {
-      status: input.status,
-      priority: input.priority,
-      notes: input.notes || null,
-    },
+  return prisma.$transaction(async (tx) => {
+    const updatedQueueItem = await tx.queueItem.update({
+      where: { id: queueItemId },
+      data: {
+        status: input.status,
+        priority: input.priority,
+        notes: input.notes || null,
+      },
+    });
+
+    if (updatedQueueItem.sourceRequestId) {
+      if (input.status === QueueStatus.COMPLETED) {
+        await tx.request.update({
+          where: { id: updatedQueueItem.sourceRequestId },
+          data: { status: RequestStatus.COMPLETED },
+        });
+      } else if (input.status === QueueStatus.CANCELLED) {
+        await tx.request.update({
+          where: { id: updatedQueueItem.sourceRequestId },
+          data: { status: RequestStatus.CANCELLED },
+        });
+      }
+    }
+
+    return updatedQueueItem;
   });
 }
 
