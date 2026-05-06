@@ -21,10 +21,46 @@ export const requestStatusOptions = Object.values(RequestStatus);
 export const queueStatusOptions = Object.values(QueueStatus);
 export const queuePriorityOptions = Object.values(QueuePriority);
 export const queueSourceTypeOptions = Object.values(QueueSourceType);
+export const queueStageDefinitions = [
+  {
+    key: "INTAKE",
+    label: "Intake",
+    statuses: [QueueStatus.PENDING],
+    tone: "warning",
+  },
+  {
+    key: "PRODUCTION",
+    label: "Production",
+    statuses: [QueueStatus.READY_TO_PRINT, QueueStatus.PRINTING, QueueStatus.POST_PROCESSING],
+    tone: "info",
+  },
+  {
+    key: "FULFILLMENT",
+    label: "Fulfillment",
+    statuses: [QueueStatus.PACKED, QueueStatus.READY_FOR_PICKUP, QueueStatus.SHIPPED],
+    tone: "success",
+  },
+  {
+    key: "CLOSED_EXCEPTION",
+    label: "Closed/Exception",
+    statuses: [QueueStatus.COMPLETED, QueueStatus.CANCELLED, QueueStatus.BLOCKED],
+    tone: "neutral",
+  },
+] as const;
+export type QueueStageKey = (typeof queueStageDefinitions)[number]["key"];
+export const queueStageOptions = queueStageDefinitions.map((definition) => definition.key) as QueueStageKey[];
 export const inventoryModeOptions = Object.values(InventoryMode);
 export const marketplaceTypeOptions = Object.values(MarketplaceType);
 export const listingStatusOptions = Object.values(ListingStatus);
 export const syncStatusOptions = Object.values(SyncStatus);
+
+const queueStatusToStageMap = new Map<QueueStatus, QueueStageKey>(
+  queueStageDefinitions.flatMap((definition) => definition.statuses.map((status) => [status, definition.key] as const)),
+);
+
+export function getQueueStageForStatus(status: QueueStatus): QueueStageKey {
+  return queueStatusToStageMap.get(status) ?? "CLOSED_EXCEPTION";
+}
 
 export const statusTone: Record<string, string> = {
   DRAFT: "neutral",
