@@ -2,11 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { CreateQueueItemModalButton } from "@/components/admin/create-queue-item-modal-button";
+import { QueueStatusInlineEditor } from "@/components/admin/queue-status-inline-editor";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import {
   type QueuePriority,
@@ -169,6 +169,12 @@ export default async function AdminQueuePage({
     key: definition.key,
     count: queueRows.filter((row) => row.stageKey === definition.key).length,
   }));
+  const redirectTo = buildQueueFilterUrl({
+    stage: stageFilter,
+    status: statusFilter,
+    sourceType: sourceFilter,
+    priority: priorityFilter,
+  });
 
   return (
     <div className="space-y-4">
@@ -360,13 +366,12 @@ export default async function AdminQueuePage({
                         {stageRows.map(({ item, totalWeightGrams, timeEstimate }) => {
                           const detailHref = `/admin/queue/${item.id}`;
                           const productExternalUrl = getProductExternalUrl(item.product);
-                          const rowLinkClassName =
-                            "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
+                          const rowLinkClassName = "block h-full px-2 py-3 focus-visible:outline-none";
 
                           return (
                             <tr
                               key={item.id}
-                              className={`border-b border-slate-100 align-top ${priorityRowClassName(item.priority)}`}
+                              className={`border-b border-slate-100 align-top transition-colors hover:bg-slate-50 focus-within:bg-slate-50 ${priorityRowClassName(item.priority)}`}
                             >
                               <td className="p-0">
                                 <Link href={detailHref} className={rowLinkClassName}>
@@ -444,11 +449,15 @@ export default async function AdminQueuePage({
                                 </Link>
                               </td>
                               <td className="p-0">
-                                <Link href={detailHref} className={rowLinkClassName}>
-                                  <div className="space-y-1">
-                                    <StatusBadge value={item.status} />
-                                  </div>
-                                </Link>
+                                <div className="space-y-2 px-2 py-3">
+                                  <QueueStatusInlineEditor
+                                    queueItemId={item.id}
+                                    currentStatus={item.status}
+                                    priority={item.priority}
+                                    notes={item.notes}
+                                    redirectTo={redirectTo}
+                                  />
+                                </div>
                               </td>
                               <td className="p-0 text-xs text-slate-500">
                                 <Link href={detailHref} className={rowLinkClassName}>

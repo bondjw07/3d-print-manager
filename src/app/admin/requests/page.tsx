@@ -2,11 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { RequestStatusInlineEditor } from "@/components/admin/request-status-inline-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
-import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -609,11 +609,10 @@ export default async function AdminRequestsPage({
                             {stageRows.map(({ request, stockSummary, timeEstimate }) => {
                               const detailHref = `/admin/requests/${request.id}`;
                               const productExternalUrl = getProductExternalUrl(request.product);
-                              const rowLinkClassName =
-                                "block h-full px-2 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-sky-50 focus-visible:outline-none";
+                              const rowLinkClassName = "block h-full px-2 py-3 focus-visible:outline-none";
 
                               return (
-                                <tr key={request.id} className="border-b border-slate-100 align-top">
+                                <tr key={request.id} className="border-b border-slate-100 align-top transition-colors hover:bg-slate-50 focus-within:bg-slate-50">
                                   <td className="px-2 py-3">
                                     <input
                                       type="checkbox"
@@ -681,9 +680,14 @@ export default async function AdminRequestsPage({
                                   </td>
 
                                   <td className="p-0">
-                                    <Link href={detailHref} className={rowLinkClassName}>
-                                      <StatusBadge value={request.status} />
-                                    </Link>
+                                    <div className="space-y-2 px-2 py-3">
+                                      <RequestStatusInlineEditor
+                                        requestId={request.id}
+                                        currentStatus={request.status}
+                                        adminNotes={request.adminNotes}
+                                        redirectTo={redirectTo}
+                                      />
+                                    </div>
                                   </td>
 
                                   <td className="p-0 text-xs text-slate-600">

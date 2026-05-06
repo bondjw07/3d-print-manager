@@ -59,13 +59,13 @@ export const queueStageDefinitions = [
   {
     key: "PRODUCTION",
     label: "Production",
-    statuses: [QueueStatus.READY_TO_PRINT, QueueStatus.PRINTING, QueueStatus.POST_PROCESSING],
+    statuses: [QueueStatus.READY_TO_PRINT, QueueStatus.PRINTING],
     tone: "info",
   },
   {
     key: "FULFILLMENT",
     label: "Fulfillment",
-    statuses: [QueueStatus.PACKED, QueueStatus.READY_FOR_PICKUP, QueueStatus.SHIPPED],
+    statuses: [QueueStatus.POST_PROCESSING, QueueStatus.PACKED, QueueStatus.READY_FOR_PICKUP, QueueStatus.SHIPPED],
     tone: "success",
   },
   {
