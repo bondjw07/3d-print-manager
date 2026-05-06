@@ -57,9 +57,15 @@ export const queueStageDefinitions = [
     tone: "warning",
   },
   {
+    key: "PRE_PRODUCTION",
+    label: "Pre-Production",
+    statuses: [QueueStatus.READY_TO_PRINT],
+    tone: "info",
+  },
+  {
     key: "PRODUCTION",
     label: "Production",
-    statuses: [QueueStatus.READY_TO_PRINT, QueueStatus.PRINTING],
+    statuses: [QueueStatus.PRINTING],
     tone: "info",
   },
   {
