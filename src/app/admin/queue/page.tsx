@@ -19,10 +19,30 @@ import {
   queueSourceTypeOptions,
   queueStatusOptions,
 } from "@/lib/domain";
+import { calculateRequestEstimate } from "@/lib/request-estimates";
+import {
+  estimateCalendarHoursFromMachineHours,
+  estimateWorkItemTime,
+  formatDurationHours,
+  formatPercent,
+} from "@/lib/processing-time-estimates";
 import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getQueueItems } from "@/server/services/queue-service";
+import { getProcessingEstimateSettings } from "@/server/services/settings-service";
+
+function formatWeightGrams(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  if (Math.abs(value - Math.round(value)) < 0.001) {
+    return `${Math.round(value)} g`;
+  }
+
+  return `${value.toFixed(1).replace(/\.0$/, "")} g`;
+}
 
 export default async function AdminQueuePage({
   searchParams,
@@ -44,7 +64,7 @@ export default async function AdminQueuePage({
       ? (params.priority as QueuePriority)
       : undefined;
 
-  const [queueItems, products, users] = await Promise.all([
+  const [queueItems, products, users, processingSettings] = await Promise.all([
     getQueueItems({ status: statusFilter, sourceType: sourceFilter, priority: priorityFilter }),
     prisma.product.findMany({ where: { status: "ACTIVE" }, orderBy: { publicName: "asc" }, select: { id: true, publicName: true } }),
     prisma.user.findMany({
@@ -52,7 +72,32 @@ export default async function AdminQueuePage({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    getProcessingEstimateSettings(),
   ]);
+  const queueItemsWithEstimates = queueItems.map((item) => {
+    const requestEstimate = calculateRequestEstimate({
+      quantity: item.quantity,
+      filamentScalePercent: item.filamentScalePercent,
+      product: item.product,
+    });
+    const timeEstimate = estimateWorkItemTime({
+      totalWeightGrams: requestEstimate.totalWeightGrams,
+      quantity: item.quantity,
+      settings: processingSettings,
+    });
+
+    return {
+      item,
+      totalWeightGrams: requestEstimate.totalWeightGrams,
+      timeEstimate,
+    };
+  });
+  const totalMachineHours = queueItemsWithEstimates.reduce(
+    (sum, row) => sum + (row.timeEstimate?.totalHours ?? 0),
+    0,
+  );
+  const totalCalendarHours = estimateCalendarHoursFromMachineHours(totalMachineHours, processingSettings);
+  const unknownEstimateCount = queueItemsWithEstimates.filter((row) => row.timeEstimate === null).length;
 
   return (
     <div className="space-y-4">
@@ -108,6 +153,22 @@ export default async function AdminQueuePage({
             </div>
           </form>
           <p className="text-xs text-slate-500">Open any queue item to edit notes, priority, and state.</p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p>
+              Estimated machine workload:{" "}
+              <span className="font-medium text-slate-800">{formatDurationHours(totalMachineHours)}</span>
+            </p>
+            <p>
+              Estimated wall-clock time at {processingSettings.printerCount} printer
+              {processingSettings.printerCount === 1 ? "" : "s"} and {formatPercent(processingSettings.printerUtilizationRate)} utilization:{" "}
+              <span className="font-medium text-slate-800">{formatDurationHours(totalCalendarHours)}</span>
+            </p>
+            {unknownEstimateCount > 0 ? (
+              <p className="text-amber-700">
+                {unknownEstimateCount} queue item{unknownEstimateCount === 1 ? "" : "s"} missing weight estimates and excluded from totals.
+              </p>
+            ) : null}
+          </div>
 
           <TableContainer>
             <Table>
@@ -118,13 +179,15 @@ export default async function AdminQueuePage({
                   <th className="px-2 py-2">Source</th>
                   <th className="px-2 py-2">Queue Source</th>
                   <th className="px-2 py-2">Qty</th>
+                  <th className="px-2 py-2">Total Weight (g)</th>
+                  <th className="px-2 py-2">Est Time</th>
                   <th className="px-2 py-2">Status / Priority</th>
                   <th className="px-2 py-2">Due</th>
                   <th className="px-2 py-2">Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {queueItems.map((item) => {
+                {queueItemsWithEstimates.map(({ item, totalWeightGrams, timeEstimate }) => {
                   const detailHref = `/admin/queue/${item.id}`;
                   const productExternalUrl = getProductExternalUrl(item.product);
                   const rowLinkClassName =
@@ -190,6 +253,23 @@ export default async function AdminQueuePage({
                           {item.quantity}
                         </Link>
                       </td>
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {formatWeightGrams(totalWeightGrams)}
+                        </Link>
+                      </td>
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
+                          {timeEstimate ? (
+                            <>
+                              <p>~{formatDurationHours(timeEstimate.totalHours)} total</p>
+                              <p className="text-slate-500">~{formatDurationHours(timeEstimate.hoursPerPrint)}/print</p>
+                            </>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </Link>
+                      </td>
                       <td className="p-0">
                         <Link href={detailHref} className={rowLinkClassName}>
                           <div className="space-y-1">
@@ -211,9 +291,9 @@ export default async function AdminQueuePage({
                     </tr>
                   );
                 })}
-                {queueItems.length === 0 ? (
+                {queueItemsWithEstimates.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={10} className="px-2 py-10 text-center text-sm text-slate-500">
                       No queue items match the current filters.
                     </td>
                   </tr>

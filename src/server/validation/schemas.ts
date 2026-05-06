@@ -11,6 +11,12 @@ import {
   SyncStatus,
   UserRole,
 } from "@/generated/prisma/client";
+import {
+  baselineGramsPerHourOptions,
+  complexityMultiplierOptions,
+  fixedHoursPerPrintOptions,
+  printerUtilizationRateOptions,
+} from "@/lib/processing-time-estimates";
 import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
 import { z } from "zod";
 
@@ -296,6 +302,31 @@ export const inventoryStockAddSchema = z.object({
 
 export const settingsSchema = z.object({
   defaultMarketplace: z.nativeEnum(MarketplaceType),
+});
+
+const printerUtilizationRateValues = printerUtilizationRateOptions.map((option) => option.value.toString()) as [
+  string,
+  ...string[],
+];
+const baselineGramsPerHourValues = baselineGramsPerHourOptions.map((option) => option.value.toString()) as [
+  string,
+  ...string[],
+];
+const complexityMultiplierValues = complexityMultiplierOptions.map((option) => option.value.toString()) as [
+  string,
+  ...string[],
+];
+const fixedHoursPerPrintValues = fixedHoursPerPrintOptions.map((option) => option.value.toString()) as [
+  string,
+  ...string[],
+];
+
+export const processingEstimateSettingsSchema = z.object({
+  printerCount: z.coerce.number().int().min(1).max(24),
+  printerUtilizationRate: z.enum(printerUtilizationRateValues).transform((value) => Number(value)),
+  baselineGramsPerHour: z.enum(baselineGramsPerHourValues).transform((value) => Number(value)),
+  complexityMultiplier: z.enum(complexityMultiplierValues).transform((value) => Number(value)),
+  fixedHoursPerPrint: z.enum(fixedHoursPerPrintValues).transform((value) => Number(value)),
 });
 
 export const myMiniFactoryCredentialsSchema = z.object({

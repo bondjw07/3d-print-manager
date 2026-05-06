@@ -343,6 +343,11 @@ model MarketplaceEvent {
 model AppSetting {
   id                 String          @id @default("app")
   defaultMarketplace MarketplaceType @default(ETSY)
+  printerCount                    Int      @default(3)
+  printerUtilizationRate          Decimal  @default(0.6) @db.Decimal(4, 2)
+  baselineGramsPerHour            Decimal  @default(31.6) @db.Decimal(6, 2)
+  complexityMultiplier            Decimal  @default(1.15) @db.Decimal(4, 2)
+  fixedHoursPerPrint              Decimal  @default(0.5) @db.Decimal(4, 2)
   myMiniFactoryClientIdHash          String?
   myMiniFactoryClientIdEncrypted     String?
   myMiniFactoryClientSecretHash      String?

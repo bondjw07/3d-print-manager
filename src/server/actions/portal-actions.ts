@@ -43,7 +43,10 @@ import {
   updateSubmittedRequestForUser,
   updateRequestByAdmin,
 } from "@/server/services/request-service";
-import { updateDefaultMarketplace } from "@/server/services/settings-service";
+import {
+  updateDefaultMarketplace,
+  updateProcessingEstimateSettings,
+} from "@/server/services/settings-service";
 import { updateUserByAdmin } from "@/server/services/user-service";
 import {
   disconnectMyMiniFactoryOAuth,
@@ -78,6 +81,7 @@ import {
   productFilamentRequirementSchema,
   productBulkUpdateSchema,
   productBulkImportSchema,
+  processingEstimateSettingsSchema,
   productFormSchema,
   queueCreateSchema,
   queueUpdateSchema,
@@ -1052,6 +1056,23 @@ export async function updateSettingsAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
+}
+
+export async function updateProcessingEstimateSettingsAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = processingEstimateSettingsSchema.safeParse(Object.fromEntries(formData));
+
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  await updateProcessingEstimateSettings(parsed.data);
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/queue");
+  revalidatePath("/admin/requests");
+  redirect(appendStatus(redirectTo, "success", "Processing estimate settings updated."));
 }
 
 export async function createManagedCreatorAction(formData: FormData) {

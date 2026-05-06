@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "AppSetting"
+ADD COLUMN "printerCount" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN "printerUtilizationRate" DECIMAL(4,2) NOT NULL DEFAULT 0.6,
+ADD COLUMN "baselineGramsPerHour" DECIMAL(6,2) NOT NULL DEFAULT 31.6,
+ADD COLUMN "complexityMultiplier" DECIMAL(4,2) NOT NULL DEFAULT 1.15,
+ADD COLUMN "fixedHoursPerPrint" DECIMAL(4,2) NOT NULL DEFAULT 0.5;

@@ -9,11 +9,18 @@ import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox"
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  estimateCalendarHoursFromMachineHours,
+  estimateWorkItemTime,
+  formatDurationHours,
+  formatPercent,
+} from "@/lib/processing-time-estimates";
 import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { humanizeEnum, requestStatusOptions } from "@/lib/domain";
 import { bulkManageRequestsAction } from "@/server/actions/portal-actions";
 import { getAllRequests } from "@/server/services/request-service";
+import { getProcessingEstimateSettings } from "@/server/services/settings-service";
 
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 const stockFilterOptions = ["all", "printable", "needs_stock", "unknown"] as const;
@@ -239,7 +246,11 @@ export default async function AdminRequestsPage({
     creator?: string | string[];
   }>;
 }) {
-  const [params, requests] = await Promise.all([searchParams, getAllRequests()]);
+  const [params, requests, processingSettings] = await Promise.all([
+    searchParams,
+    getAllRequests(),
+    getProcessingEstimateSettings(),
+  ]);
 
   const creatorOptions = Array.from(
     new Set(
@@ -255,12 +266,17 @@ export default async function AdminRequestsPage({
   const errorMessage = firstSearchParamValue(params.error);
   const successMessage = firstSearchParamValue(params.success);
 
-  const requestsWithStock = requests.map((request) => ({
+  const requestsWithStockAndTime = requests.map((request) => ({
     request,
     stockSummary: getRequestStockSummary(request),
+    timeEstimate: estimateWorkItemTime({
+      totalWeightGrams: request.totalWeightGrams,
+      quantity: request.quantity,
+      settings: processingSettings,
+    }),
   }));
 
-  const stockCounts = requestsWithStock.reduce(
+  const stockCounts = requestsWithStockAndTime.reduce(
     (counts, item) => {
       counts[item.stockSummary.state] += 1;
       return counts;
@@ -272,7 +288,7 @@ export default async function AdminRequestsPage({
     } as Record<RequestStockState, number>,
   );
 
-  const filteredRequests = requestsWithStock.filter((item) => {
+  const filteredRequests = requestsWithStockAndTime.filter((item) => {
     if (stockFilter !== "all") {
       if (stockFilter === "printable" && item.stockSummary.state !== "PRINTABLE") {
         return false;
@@ -307,6 +323,12 @@ export default async function AdminRequestsPage({
     statusFilter,
     creatorFilter,
   });
+  const totalMachineHours = filteredRequests.reduce(
+    (sum, item) => sum + (item.timeEstimate?.totalHours ?? 0),
+    0,
+  );
+  const totalCalendarHours = estimateCalendarHoursFromMachineHours(totalMachineHours, processingSettings);
+  const unknownEstimateCount = filteredRequests.filter((item) => item.timeEstimate === null).length;
 
   return (
     <div className="space-y-4">
@@ -365,10 +387,27 @@ export default async function AdminRequestsPage({
               Clear
             </Link>
             <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-5">
-              Showing {filteredRequests.length} of {requestsWithStock.length} requests • {stockCounts.PRINTABLE} printable •{" "}
+              Showing {filteredRequests.length} of {requestsWithStockAndTime.length} requests • {stockCounts.PRINTABLE} printable •{" "}
               {stockCounts.INSUFFICIENT_STOCK} need stock • {stockCounts.UNKNOWN} unknown
             </p>
           </form>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p>
+              Estimated machine workload:{" "}
+              <span className="font-medium text-slate-800">{formatDurationHours(totalMachineHours)}</span>
+            </p>
+            <p>
+              Estimated wall-clock time at {processingSettings.printerCount} printer
+              {processingSettings.printerCount === 1 ? "" : "s"} and {formatPercent(processingSettings.printerUtilizationRate)} utilization:{" "}
+              <span className="font-medium text-slate-800">{formatDurationHours(totalCalendarHours)}</span>
+            </p>
+            {unknownEstimateCount > 0 ? (
+              <p className="text-amber-700">
+                {unknownEstimateCount} request{unknownEstimateCount === 1 ? "" : "s"} missing weight estimates and excluded from totals.
+              </p>
+            ) : null}
+          </div>
 
           <form
             id="bulk-request-management-form"
@@ -423,6 +462,7 @@ export default async function AdminRequestsPage({
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2">Scale</th>
                   <th className="px-2 py-2">Total Weight (g)</th>
+                  <th className="px-2 py-2">Est Time</th>
                   <th className="px-2 py-2">Calculated Cost</th>
                   <th className="px-2 py-2">Stock Fit</th>
                   <th className="px-2 py-2">Request Notes</th>
@@ -430,7 +470,7 @@ export default async function AdminRequestsPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredRequests.map(({ request, stockSummary }) => {
+                {filteredRequests.map(({ request, stockSummary, timeEstimate }) => {
                   const detailHref = `/admin/requests/${request.id}`;
                   const productExternalUrl = getProductExternalUrl(request.product);
                   const rowLinkClassName =
@@ -525,6 +565,19 @@ export default async function AdminRequestsPage({
 
                       <td className="p-0 text-xs text-slate-600">
                         <Link href={detailHref} className={rowLinkClassName}>
+                          {timeEstimate ? (
+                            <>
+                              <p>~{formatDurationHours(timeEstimate.totalHours)} total</p>
+                              <p className="text-slate-500">~{formatDurationHours(timeEstimate.hoursPerPrint)}/print</p>
+                            </>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </Link>
+                      </td>
+
+                      <td className="p-0 text-xs text-slate-600">
+                        <Link href={detailHref} className={rowLinkClassName}>
                           {request.calculatedCost === null ? "—" : formatCurrency(request.calculatedCost)}
                         </Link>
                       </td>
@@ -560,7 +613,7 @@ export default async function AdminRequestsPage({
                 })}
                 {filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-2 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={14} className="px-2 py-10 text-center text-sm text-slate-500">
                       No requests found for the selected filters.
                     </td>
                   </tr>

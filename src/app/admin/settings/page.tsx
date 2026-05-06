@@ -6,27 +6,35 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
 import {
+  baselineGramsPerHourOptions,
+  complexityMultiplierOptions,
+  fixedHoursPerPrintOptions,
+  printerUtilizationRateOptions,
+} from "@/lib/processing-time-estimates";
+import {
   createManagedCreatorAction,
   deleteManagedCreatorAction,
   deleteAllFilamentsAction,
   deleteAllProductsAction,
   disconnectMyMiniFactoryOAuthAction,
+  updateProcessingEstimateSettingsAction,
   updateManagedCreatorAction,
   updateMyMiniFactoryCredentialsAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
-import { getSettings } from "@/server/services/settings-service";
+import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 
 export default async function AdminSettingsPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, settings, myMiniFactoryStatus, creators] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, creators] = await Promise.all([
     searchParams,
     getSettings(),
+    getProcessingEstimateSettings(),
     getMyMiniFactoryIntegrationStatus(),
     getManagedCreators(),
   ]);
@@ -65,6 +73,121 @@ export default async function AdminSettingsPage({
             </Select>
             <Button type="submit" className="w-fit">
               Save Settings
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Print Time Estimation</CardTitle>
+          <CardDescription>
+            Controls rough production-time estimates shown on queue and request lists. These values tune machine-time
+            plus per-print overhead, then convert to calendar time using printer count and utilization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateProcessingEstimateSettingsAction} className="grid max-w-3xl gap-4">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm font-medium text-slate-800" htmlFor="printerCount">
+                Number of printers
+                <Input
+                  id="printerCount"
+                  name="printerCount"
+                  type="number"
+                  min={1}
+                  max={24}
+                  defaultValue={processingSettings.printerCount}
+                  required
+                />
+                <span className="text-xs font-normal text-slate-500">
+                  Used to convert total machine-hours into wall-clock finish time.
+                </span>
+              </label>
+
+              <label className="grid gap-1 text-sm font-medium text-slate-800" htmlFor="printerUtilizationRate">
+                Printer utilization
+                <Select
+                  id="printerUtilizationRate"
+                  name="printerUtilizationRate"
+                  defaultValue={processingSettings.printerUtilizationRate.toString()}
+                >
+                  {printerUtilizationRateOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-xs font-normal text-slate-500">
+                  Real-world uptime allowance for downtime, operator availability, and interruptions.
+                </span>
+              </label>
+
+              <label className="grid gap-1 text-sm font-medium text-slate-800" htmlFor="baselineGramsPerHour">
+                Baseline throughput
+                <Select
+                  id="baselineGramsPerHour"
+                  name="baselineGramsPerHour"
+                  defaultValue={processingSettings.baselineGramsPerHour.toString()}
+                >
+                  {baselineGramsPerHourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-xs font-normal text-slate-500">
+                  Rough grams-per-hour conversion before complexity and overhead are applied.
+                </span>
+              </label>
+
+              <label className="grid gap-1 text-sm font-medium text-slate-800" htmlFor="complexityMultiplier">
+                Complexity multiplier
+                <Select
+                  id="complexityMultiplier"
+                  name="complexityMultiplier"
+                  defaultValue={processingSettings.complexityMultiplier.toString()}
+                >
+                  {complexityMultiplierOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-xs font-normal text-slate-500">
+                  Applies extra time for support-heavy, slower, or reliability-focused print profiles.
+                </span>
+              </label>
+
+              <label className="grid gap-1 text-sm font-medium text-slate-800 sm:col-span-2" htmlFor="fixedHoursPerPrint">
+                Fixed overhead per print
+                <Select
+                  id="fixedHoursPerPrint"
+                  name="fixedHoursPerPrint"
+                  defaultValue={processingSettings.fixedHoursPerPrint.toString()}
+                >
+                  {fixedHoursPerPrintOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-xs font-normal text-slate-500">
+                  Non-printing time per unit for setup, prep, unloading, and cleanup.
+                </span>
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <p>Formula: ((total grams / grams-per-hour) × complexity multiplier) + (quantity × overhead hours).</p>
+              <p className="mt-1">
+                Calendar finish estimate: machine-hours / (printer count × utilization).
+              </p>
+            </div>
+
+            <Button type="submit" className="w-fit">
+              Save Time Estimation Settings
             </Button>
           </form>
         </CardContent>
