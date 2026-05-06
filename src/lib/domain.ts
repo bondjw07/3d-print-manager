@@ -88,15 +88,24 @@ export const marketplaceTypeOptions = Object.values(MarketplaceType);
 export const listingStatusOptions = Object.values(ListingStatus);
 export const syncStatusOptions = Object.values(SyncStatus);
 
-const queueStatusToStageMap = new Map<QueueStatus, QueueStageKey>(
-  queueStageDefinitions.flatMap((definition) => definition.statuses.map((status) => [status, definition.key] as const)),
-);
+const queueStatusToStageMap: Record<QueueStatus, QueueStageKey> = {
+  [QueueStatus.PENDING]: "INTAKE",
+  [QueueStatus.READY_TO_PRINT]: "PRE_PRODUCTION",
+  [QueueStatus.PRINTING]: "PRODUCTION",
+  [QueueStatus.POST_PROCESSING]: "FULFILLMENT",
+  [QueueStatus.PACKED]: "FULFILLMENT",
+  [QueueStatus.READY_FOR_PICKUP]: "FULFILLMENT",
+  [QueueStatus.SHIPPED]: "FULFILLMENT",
+  [QueueStatus.COMPLETED]: "CLOSED_EXCEPTION",
+  [QueueStatus.CANCELLED]: "CLOSED_EXCEPTION",
+  [QueueStatus.BLOCKED]: "CLOSED_EXCEPTION",
+};
 const requestStatusToStageMap = new Map<RequestStatus, RequestStageKey>(
   requestStageDefinitions.flatMap((definition) => definition.statuses.map((status) => [status, definition.key] as const)),
 );
 
 export function getQueueStageForStatus(status: QueueStatus): QueueStageKey {
-  return queueStatusToStageMap.get(status) ?? "CLOSED_EXCEPTION";
+  return queueStatusToStageMap[status] ?? "CLOSED_EXCEPTION";
 }
 
 export function getRequestStageForStatus(status: RequestStatus): RequestStageKey {
