@@ -32,13 +32,11 @@ import { getProcessingEstimateSettings } from "@/server/services/settings-servic
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 const stockFilterOptions = ["all", "printable", "needs_stock", "unknown"] as const;
 const ALL_STAGE_FILTER = "all";
-const ALL_STATUS_FILTER = "all";
 const ALL_CREATOR_FILTER = "all";
 const NO_CREATOR_FILTER = "__none__";
 
 type StockFilterOption = (typeof stockFilterOptions)[number];
 type StageFilterOption = RequestStageKey | typeof ALL_STAGE_FILTER;
-type StatusFilterOption = (typeof requestStatusOptions)[number] | typeof ALL_STATUS_FILTER;
 type RequestStockState = "PRINTABLE" | "INSUFFICIENT_STOCK" | "UNKNOWN";
 type AdminRequest = Awaited<ReturnType<typeof getAllRequests>>[number];
 
@@ -111,16 +109,6 @@ function parseStageFilter(value: string | undefined): StageFilterOption {
   return requestStageOptions.includes(value as RequestStageKey) ? (value as RequestStageKey) : ALL_STAGE_FILTER;
 }
 
-function parseStatusFilter(value: string | undefined): StatusFilterOption {
-  if (!value || value === ALL_STATUS_FILTER) {
-    return ALL_STATUS_FILTER;
-  }
-
-  return requestStatusOptions.includes(value as (typeof requestStatusOptions)[number])
-    ? (value as (typeof requestStatusOptions)[number])
-    : ALL_STATUS_FILTER;
-}
-
 function normalizeCreatorName(value: string | null | undefined) {
   return value?.trim().replace(/\s+/g, " ") ?? "";
 }
@@ -140,7 +128,6 @@ function parseCreatorFilter(value: string | undefined, creatorOptions: string[])
 function buildRequestsFilterUrl(input: {
   stageFilter: StageFilterOption;
   stockFilter: StockFilterOption;
-  statusFilter: StatusFilterOption;
   creatorFilter: string;
 }) {
   const query = new URLSearchParams();
@@ -149,9 +136,6 @@ function buildRequestsFilterUrl(input: {
   }
   if (input.stockFilter !== "all") {
     query.set("stock", input.stockFilter);
-  }
-  if (input.statusFilter !== ALL_STATUS_FILTER) {
-    query.set("status", input.statusFilter);
   }
   if (input.creatorFilter !== ALL_CREATOR_FILTER) {
     query.set("creator", input.creatorFilter);
@@ -277,7 +261,6 @@ export default async function AdminRequestsPage({
     success?: string | string[];
     stage?: string | string[];
     stock?: string | string[];
-    status?: string | string[];
     creator?: string | string[];
   }>;
 }) {
@@ -297,7 +280,6 @@ export default async function AdminRequestsPage({
 
   const stageFilter = parseStageFilter(firstSearchParamValue(params.stage));
   const stockFilter = parseStockFilter(firstSearchParamValue(params.stock));
-  const statusFilter = parseStatusFilter(firstSearchParamValue(params.status));
   const creatorFilter = parseCreatorFilter(firstSearchParamValue(params.creator), creatorOptions);
   const errorMessage = firstSearchParamValue(params.error);
   const successMessage = firstSearchParamValue(params.success);
@@ -344,10 +326,6 @@ export default async function AdminRequestsPage({
       }
     }
 
-    if (statusFilter !== ALL_STATUS_FILTER && item.request.status !== statusFilter) {
-      return false;
-    }
-
     const creatorName = normalizeCreatorName(item.request.product.importSourceCreatorName);
     if (creatorFilter === NO_CREATOR_FILTER && creatorName) {
       return false;
@@ -362,7 +340,6 @@ export default async function AdminRequestsPage({
   const redirectTo = buildRequestsFilterUrl({
     stageFilter,
     stockFilter,
-    statusFilter,
     creatorFilter,
   });
   const stageCounts = requestStageDefinitions.map((definition) => ({
@@ -398,7 +375,7 @@ export default async function AdminRequestsPage({
           <form
             action="/admin/requests"
             method="get"
-            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[220px_220px_220px_240px_auto_auto] lg:items-center"
+            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[220px_220px_240px_auto_auto] lg:items-center"
           >
             <Select name="stage" defaultValue={stageFilter}>
               <option value={ALL_STAGE_FILTER}>All stage groups</option>
@@ -413,14 +390,6 @@ export default async function AdminRequestsPage({
               <option value="printable">Can print now</option>
               <option value="needs_stock">Need more stock</option>
               <option value="unknown">Unknown stock fit</option>
-            </Select>
-            <Select name="status" defaultValue={statusFilter}>
-              <option value={ALL_STATUS_FILTER}>All statuses</option>
-              {requestStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {humanizeEnum(status)}
-                </option>
-              ))}
             </Select>
             <Select name="creator" defaultValue={creatorFilter}>
               <option value={ALL_CREATOR_FILTER}>All creators</option>
@@ -440,7 +409,7 @@ export default async function AdminRequestsPage({
             >
               Clear
             </Link>
-            <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-6">
+            <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-5">
               Showing {filteredRequests.length} of {requestsWithStockAndTime.length} requests • {stockCounts.PRINTABLE} printable •{" "}
               {stockCounts.INSUFFICIENT_STOCK} need stock • {stockCounts.UNKNOWN} unknown
             </p>
@@ -451,7 +420,6 @@ export default async function AdminRequestsPage({
               href={buildRequestsFilterUrl({
                 stageFilter: ALL_STAGE_FILTER,
                 stockFilter,
-                statusFilter,
                 creatorFilter,
               })}
               className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${
@@ -470,7 +438,6 @@ export default async function AdminRequestsPage({
                   href={buildRequestsFilterUrl({
                     stageFilter: stage.key,
                     stockFilter,
-                    statusFilter,
                     creatorFilter,
                   })}
                   className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${

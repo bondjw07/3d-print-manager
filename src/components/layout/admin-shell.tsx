@@ -7,7 +7,7 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
   return (
     <div className="admin-shell-bg min-h-screen">
       <div className="mx-auto flex w-full max-w-[1440px] gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <aside className="hidden w-64 shrink-0 rounded-3xl border border-border bg-surface/90 p-4 shadow-[0_20px_80px_-48px_rgba(2,6,23,0.4)] lg:block">
+        <aside className="hidden w-64 shrink-0 rounded-3xl border border-border bg-surface/90 p-4 shadow-[0_20px_80px_-48px_rgba(2,6,23,0.4)] lg:sticky lg:top-20 lg:block lg:self-start lg:max-h-[calc(100vh-6.5rem)] lg:overflow-y-auto">
           <Link href="/admin" className="mb-6 block rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-slate-950">
             3D Print Ops Console
           </Link>
