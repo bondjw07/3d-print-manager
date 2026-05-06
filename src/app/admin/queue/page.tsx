@@ -6,6 +6,7 @@ import { QueueStatusInlineEditor } from "@/components/admin/queue-status-inline-
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HoverInfo } from "@/components/ui/hover-info";
 import { Select } from "@/components/ui/select";
 import { Table, TableContainer } from "@/components/ui/table";
 import {
@@ -36,6 +37,17 @@ import { prisma } from "@/lib/prisma";
 import { getQueueItems } from "@/server/services/queue-service";
 import { getProcessingEstimateSettings } from "@/server/services/settings-service";
 
+const FULL_FILAMENT_ROLL_GRAMS = 1000;
+type AdminQueueItem = Awaited<ReturnType<typeof getQueueItems>>[number];
+type QueueFilamentStockState = "PRINTABLE" | "INSUFFICIENT_STOCK" | "UNKNOWN";
+
+type QueueFilamentStockAlert = {
+  state: QueueFilamentStockState;
+  missingTotalGrams: number | null;
+  detail: string;
+  detailLines: string[];
+};
+
 function formatWeightGrams(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
     return "—";
@@ -46,6 +58,107 @@ function formatWeightGrams(value: number | null) {
   }
 
   return `${value.toFixed(1).replace(/\.0$/, "")} g`;
+}
+
+function formatKnownWeightGrams(value: number) {
+  if (Math.abs(value - Math.round(value)) < 0.001) {
+    return `${Math.round(value)} g`;
+  }
+
+  return `${value.toFixed(1).replace(/\.0$/, "")} g`;
+}
+
+function toFiniteNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stockAlertBadgeClassName(state: QueueFilamentStockState) {
+  if (state === "INSUFFICIENT_STOCK") {
+    return "border-rose-200 bg-rose-50 text-rose-800";
+  }
+
+  if (state === "UNKNOWN") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+}
+
+function getQueueFilamentStockAlert(item: AdminQueueItem): QueueFilamentStockAlert {
+  const requirements = item.product.filamentRequirements;
+
+  if (requirements.length === 0) {
+    return {
+      state: "UNKNOWN",
+      missingTotalGrams: null,
+      detail: "No filament requirements configured.",
+      detailLines: [],
+    };
+  }
+
+  const filamentScaleMultiplier = Math.max(0, (toFiniteNumber(item.filamentScalePercent) ?? 100) / 100);
+  let missingTotalGrams = 0;
+  let missingEstimateCount = 0;
+  const shortfallByFilament = new Map<string, number>();
+
+  for (const requirement of requirements) {
+    const estimatedGramsPerPrint = toFiniteNumber(requirement.estimatedGramsPerPrint);
+    if (estimatedGramsPerPrint === null || estimatedGramsPerPrint <= 0) {
+      missingEstimateCount += 1;
+      continue;
+    }
+
+    const requiredGrams = estimatedGramsPerPrint * item.quantity * filamentScaleMultiplier;
+    const partialRollGrams = requirement.filament.partialRolls.reduce(
+      (sum, roll) => sum + (toFiniteNumber(roll.gramsRemaining) ?? 0),
+      0,
+    );
+    const availableGrams = requirement.filament.fullRollCount * FULL_FILAMENT_ROLL_GRAMS + partialRollGrams;
+
+    if (availableGrams + 0.001 < requiredGrams) {
+      const shortfallGrams = requiredGrams - availableGrams;
+      missingTotalGrams += shortfallGrams;
+      shortfallByFilament.set(
+        requirement.filament.name,
+        (shortfallByFilament.get(requirement.filament.name) ?? 0) + shortfallGrams,
+      );
+    }
+  }
+
+  if (missingTotalGrams > 0) {
+    const detailLines = [...shortfallByFilament.entries()]
+      .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+      .map(([filamentName, shortfallGrams]) => `${filamentName}: short ${formatKnownWeightGrams(shortfallGrams)}`);
+
+    return {
+      state: "INSUFFICIENT_STOCK",
+      missingTotalGrams,
+      detail: `Total short: ${formatKnownWeightGrams(missingTotalGrams)}`,
+      detailLines,
+    };
+  }
+
+  if (missingEstimateCount > 0) {
+    const missingEstimateLabel =
+      missingEstimateCount === 1
+        ? "1 requirement is missing grams."
+        : `${missingEstimateCount} requirements are missing grams.`;
+
+    return {
+      state: "UNKNOWN",
+      missingTotalGrams: null,
+      detail: missingEstimateLabel,
+      detailLines: [],
+    };
+  }
+
+  return {
+    state: "PRINTABLE",
+    missingTotalGrams: 0,
+    detail: "Filament stock is sufficient for this item.",
+    detailLines: [],
+  };
 }
 
 const stageToneClassName: Record<string, string> = {
@@ -154,6 +267,7 @@ export default async function AdminQueuePage({
       item,
       totalWeightGrams: requestEstimate.totalWeightGrams,
       timeEstimate,
+      filamentStockAlert: getQueueFilamentStockAlert(item),
       stageKey: getQueueStageForStatus(item.status),
     };
   });
@@ -164,6 +278,12 @@ export default async function AdminQueuePage({
   );
   const totalCalendarHours = estimateCalendarHoursFromMachineHours(totalMachineHours, processingSettings);
   const unknownEstimateCount = visibleRows.filter((row) => row.timeEstimate === null).length;
+  const insufficientStockRows = visibleRows.filter((row) => row.filamentStockAlert.state === "INSUFFICIENT_STOCK");
+  const insufficientStockCount = insufficientStockRows.length;
+  const totalMissingStockGrams = insufficientStockRows.reduce(
+    (sum, row) => sum + (row.filamentStockAlert.missingTotalGrams ?? 0),
+    0,
+  );
   const rowCount = visibleRows.length;
   const stageCounts = queueStageDefinitions.map((definition) => ({
     key: definition.key,
@@ -283,6 +403,14 @@ export default async function AdminQueuePage({
           <p className="text-xs text-slate-500">
             Showing {rowCount} queue item{rowCount === 1 ? "" : "s"} • Open any item to edit notes, priority, and state.
           </p>
+          {insufficientStockCount > 0 ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <p className="font-medium">
+                {insufficientStockCount} queue item{insufficientStockCount === 1 ? "" : "s"} need filament restock.
+              </p>
+              <p>Estimated visible shortfall: {formatWeightGrams(totalMissingStockGrams)}.</p>
+            </div>
+          ) : null}
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             <p>
               Estimated machine workload:{" "}
@@ -307,6 +435,9 @@ export default async function AdminQueuePage({
         const stageTotalUnits = stageRows.reduce((sum, row) => sum + row.item.quantity, 0);
         const stageMachineHours = stageRows.reduce((sum, row) => sum + (row.timeEstimate?.totalHours ?? 0), 0);
         const stageUnknownEstimateCount = stageRows.filter((row) => row.timeEstimate === null).length;
+        const stageInsufficientStockCount = stageRows.filter(
+          (row) => row.filamentStockAlert.state === "INSUFFICIENT_STOCK",
+        ).length;
         const blockedCount = stageRows.filter((row) => row.item.status === "BLOCKED").length;
         const oldestCreatedAt =
           stageRows.length > 0
@@ -335,6 +466,11 @@ export default async function AdminQueuePage({
                         {stageUnknownEstimateCount} item{stageUnknownEstimateCount === 1 ? "" : "s"} missing time estimate.
                       </p>
                     ) : null}
+                    {stageInsufficientStockCount > 0 ? (
+                      <p className="text-xs text-rose-700">
+                        {stageInsufficientStockCount} item{stageInsufficientStockCount === 1 ? "" : "s"} currently short on filament.
+                      </p>
+                    ) : null}
                   </div>
                   <span className="text-xs font-medium text-slate-500">
                     <span className="group-open:hidden">Expand</span>
@@ -353,17 +489,15 @@ export default async function AdminQueuePage({
                           <th className="px-2 py-2">Thumb</th>
                           <th className="px-2 py-2">Product</th>
                           <th className="px-2 py-2">Source</th>
-                          <th className="px-2 py-2">Queue Source</th>
                           <th className="px-2 py-2">Qty</th>
                           <th className="px-2 py-2">Total Weight (g)</th>
                           <th className="px-2 py-2">Est Time</th>
                           <th className="px-2 py-2">Status</th>
-                          <th className="px-2 py-2">Due</th>
                           <th className="px-2 py-2">Updated</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {stageRows.map(({ item, totalWeightGrams, timeEstimate }) => {
+                        {stageRows.map(({ item, totalWeightGrams, timeEstimate, filamentStockAlert }) => {
                           const detailHref = `/admin/queue/${item.id}`;
                           const productExternalUrl = getProductExternalUrl(item.product);
                           const rowLinkClassName = "block h-full px-2 py-3 focus-visible:outline-none";
@@ -417,17 +551,6 @@ export default async function AdminQueuePage({
                               </td>
                               <td className="p-0 text-sm text-slate-700">
                                 <Link href={detailHref} className={rowLinkClassName}>
-                                  <p>{humanizeEnum(item.sourceType)}</p>
-                                  {item.sourceReferenceId ? (
-                                    <p className="text-xs text-slate-500">Ref {item.sourceReferenceId}</p>
-                                  ) : null}
-                                  {item.requesterUser ? (
-                                    <p className="text-xs text-slate-500">Requester {item.requesterUser.name}</p>
-                                  ) : null}
-                                </Link>
-                              </td>
-                              <td className="p-0 text-sm text-slate-700">
-                                <Link href={detailHref} className={rowLinkClassName}>
                                   {item.quantity}
                                 </Link>
                               </td>
@@ -457,12 +580,31 @@ export default async function AdminQueuePage({
                                     notes={item.notes}
                                     redirectTo={redirectTo}
                                   />
+                                  {filamentStockAlert.state === "INSUFFICIENT_STOCK" ? (
+                                    <HoverInfo
+                                      content={
+                                        <div className="space-y-1">
+                                          <p className="font-medium">{filamentStockAlert.detail}</p>
+                                          <div className="space-y-0.5">
+                                            {filamentStockAlert.detailLines.map((detailLine) => (
+                                              <p key={detailLine} className="leading-[1.25]">
+                                                {detailLine}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      }
+                                      align="start"
+                                      panelClassName="max-w-[34rem]"
+                                    >
+                                      <span
+                                        className={`inline-flex cursor-help rounded-full border px-2.5 py-1 text-[11px] font-medium ${stockAlertBadgeClassName(filamentStockAlert.state)}`}
+                                      >
+                                        Needs Stock
+                                      </span>
+                                    </HoverInfo>
+                                  ) : null}
                                 </div>
-                              </td>
-                              <td className="p-0 text-xs text-slate-500">
-                                <Link href={detailHref} className={rowLinkClassName}>
-                                  {formatDateTime(item.dueDate)}
-                                </Link>
                               </td>
                               <td className="p-0 text-xs text-slate-500">
                                 <Link href={detailHref} className={rowLinkClassName}>

@@ -32,7 +32,17 @@ export async function getQueueItems(filters?: {
             orderBy: { updatedAt: "desc" },
           },
           filamentRequirements: {
-            include: { filament: true },
+            include: {
+              filament: {
+                include: {
+                  partialRolls: {
+                    select: {
+                      gramsRemaining: true,
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
