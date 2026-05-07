@@ -24,7 +24,7 @@ import {
   queueStageOptions,
   queueStatusOptions,
 } from "@/lib/domain";
-import { calculateRequestEstimate } from "@/lib/request-estimates";
+import { calculateRequestFilamentWeightBreakdown, type RequestFilamentWeightBreakdown } from "@/lib/request-estimates";
 import {
   estimateCalendarHoursFromMachineHours,
   estimateWorkItemTime,
@@ -47,6 +47,25 @@ type QueueFilamentStockAlert = {
   detail: string;
   detailLines: string[];
 };
+
+function renderWeightBreakdownContent(weightBreakdown: RequestFilamentWeightBreakdown) {
+  if (weightBreakdown.entries.length === 0) {
+    return <p>{weightBreakdown.detail}</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      <p className="font-medium">{weightBreakdown.detail}</p>
+      <div className="space-y-0.5">
+        {weightBreakdown.entries.map((entry) => (
+          <p key={entry.filamentName} className="leading-[1.25]">
+            {entry.filamentName}: {formatKnownWeightGrams(entry.totalWeightGrams)}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function formatWeightGrams(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
@@ -252,20 +271,21 @@ export default async function AdminQueuePage({
     getProcessingEstimateSettings(),
   ]);
   const queueRows = queueItems.map((item) => {
-    const requestEstimate = calculateRequestEstimate({
+    const weightBreakdown = calculateRequestFilamentWeightBreakdown({
       quantity: item.quantity,
       filamentScalePercent: item.filamentScalePercent,
       product: item.product,
     });
     const timeEstimate = estimateWorkItemTime({
-      totalWeightGrams: requestEstimate.totalWeightGrams,
+      totalWeightGrams: weightBreakdown.totalWeightGrams,
       quantity: item.quantity,
       settings: processingSettings,
     });
 
     return {
       item,
-      totalWeightGrams: requestEstimate.totalWeightGrams,
+      totalWeightGrams: weightBreakdown.totalWeightGrams,
+      weightBreakdown,
       timeEstimate,
       filamentStockAlert: getQueueFilamentStockAlert(item),
       stageKey: getQueueStageForStatus(item.status),
@@ -497,7 +517,7 @@ export default async function AdminQueuePage({
                         </tr>
                       </thead>
                       <tbody>
-                        {stageRows.map(({ item, totalWeightGrams, timeEstimate, filamentStockAlert }) => {
+                        {stageRows.map(({ item, totalWeightGrams, weightBreakdown, timeEstimate, filamentStockAlert }) => {
                           const detailHref = `/admin/queue/${item.id}`;
                           const productExternalUrl = getProductExternalUrl(item.product);
                           const rowLinkClassName = "block h-full px-2 py-3 focus-visible:outline-none";
@@ -556,7 +576,15 @@ export default async function AdminQueuePage({
                               </td>
                               <td className="p-0 text-xs text-slate-600">
                                 <Link href={detailHref} className={rowLinkClassName}>
-                                  {formatWeightGrams(totalWeightGrams)}
+                                  <HoverInfo
+                                    content={renderWeightBreakdownContent(weightBreakdown)}
+                                    align="start"
+                                    panelClassName="max-w-[28rem]"
+                                  >
+                                    <span className="inline-flex cursor-help underline decoration-dotted underline-offset-2">
+                                      {formatWeightGrams(totalWeightGrams)}
+                                    </span>
+                                  </HoverInfo>
                                 </Link>
                               </td>
                               <td className="p-0 text-xs text-slate-600">

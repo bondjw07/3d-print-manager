@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { RequestStatusInlineEditor } from "@/components/admin/request-status-inline-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HoverInfo } from "@/components/ui/hover-info";
 import { Select } from "@/components/ui/select";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
@@ -16,6 +17,7 @@ import {
   formatPercent,
 } from "@/lib/processing-time-estimates";
 import { getProductExternalUrl } from "@/lib/product-external-url";
+import { calculateRequestFilamentWeightBreakdown, type RequestFilamentWeightBreakdown } from "@/lib/request-estimates";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import {
   type RequestStageKey,
@@ -45,7 +47,27 @@ type RequestStockSummary = {
   requiredTotalGrams: number | null;
   missingTotalGrams: number | null;
   detail: string;
+  detailLines: string[];
 };
+
+function renderWeightBreakdownContent(weightBreakdown: RequestFilamentWeightBreakdown) {
+  if (weightBreakdown.entries.length === 0) {
+    return <p>{weightBreakdown.detail}</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      <p className="font-medium">{weightBreakdown.detail}</p>
+      <div className="space-y-0.5">
+        {weightBreakdown.entries.map((entry) => (
+          <p key={entry.filamentName} className="leading-[1.25]">
+            {entry.filamentName}: {formatKnownWeightGrams(entry.totalWeightGrams)}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function formatScalePercent(value: unknown) {
   const numeric = Number(value);
@@ -145,26 +167,6 @@ function buildRequestsFilterUrl(input: {
   return queryString ? `/admin/requests?${queryString}` : "/admin/requests";
 }
 
-function stockBadgeLabel(state: RequestStockState) {
-  if (state === "PRINTABLE") {
-    return "Can Print";
-  }
-  if (state === "INSUFFICIENT_STOCK") {
-    return "Need Stock";
-  }
-  return "Unknown";
-}
-
-function stockBadgeClassName(state: RequestStockState) {
-  if (state === "PRINTABLE") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  }
-  if (state === "INSUFFICIENT_STOCK") {
-    return "border-amber-200 bg-amber-50 text-amber-800";
-  }
-  return "border-slate-200 bg-slate-100 text-slate-700";
-}
-
 const stageToneClassName: Record<string, string> = {
   success: "border-emerald-200 bg-emerald-100 text-emerald-800",
   info: "border-sky-200 bg-sky-100 text-sky-800",
@@ -186,6 +188,7 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
       requiredTotalGrams: null,
       missingTotalGrams: null,
       detail: "No filament requirements configured.",
+      detailLines: [],
     };
   }
 
@@ -193,7 +196,7 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
   let requiredTotalGrams = 0;
   let missingTotalGrams = 0;
   let missingEstimateCount = 0;
-  const shortfallDetails: string[] = [];
+  const shortfallByFilament = new Map<string, number>();
 
   for (const requirement of requirements) {
     const estimatedGramsPerPrint = toFiniteNumber(requirement.estimatedGramsPerPrint);
@@ -214,20 +217,24 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
     if (availableGrams + 0.001 < requiredGrams) {
       const shortfallGrams = requiredGrams - availableGrams;
       missingTotalGrams += shortfallGrams;
-      shortfallDetails.push(`${requirement.filament.name}: short ${formatKnownWeightGrams(shortfallGrams)}`);
+      shortfallByFilament.set(
+        requirement.filament.name,
+        (shortfallByFilament.get(requirement.filament.name) ?? 0) + shortfallGrams,
+      );
     }
   }
 
   if (missingTotalGrams > 0) {
-    const shortfallPreview = shortfallDetails.slice(0, 2).join("; ");
-    const hiddenShortfallCount = shortfallDetails.length - 2;
-    const moreText = hiddenShortfallCount > 0 ? ` (+${hiddenShortfallCount} more)` : "";
+    const detailLines = [...shortfallByFilament.entries()]
+      .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+      .map(([filamentName, shortfallGrams]) => `${filamentName}: short ${formatKnownWeightGrams(shortfallGrams)}`);
 
     return {
       state: "INSUFFICIENT_STOCK",
       requiredTotalGrams,
       missingTotalGrams,
-      detail: `${formatKnownWeightGrams(missingTotalGrams)} short. ${shortfallPreview}${moreText}`,
+      detail: `Total short: ${formatKnownWeightGrams(missingTotalGrams)}`,
+      detailLines,
     };
   }
 
@@ -242,6 +249,7 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
       requiredTotalGrams: requiredTotalGrams > 0 ? requiredTotalGrams : null,
       missingTotalGrams: null,
       detail: missingEstimateLabel,
+      detailLines: [],
     };
   }
 
@@ -250,6 +258,7 @@ function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
     requiredTotalGrams,
     missingTotalGrams: 0,
     detail: `Estimated ${formatKnownWeightGrams(requiredTotalGrams)} required.`,
+    detailLines: [],
   };
 }
 
@@ -287,6 +296,11 @@ export default async function AdminRequestsPage({
   const requestsWithStockAndTime = requests.map((request) => ({
     request,
     stockSummary: getRequestStockSummary(request),
+    weightBreakdown: calculateRequestFilamentWeightBreakdown({
+      quantity: request.quantity,
+      filamentScalePercent: request.filamentScalePercent,
+      product: request.product,
+    }),
     timeEstimate: estimateWorkItemTime({
       totalWeightGrams: request.totalWeightGrams,
       quantity: request.quantity,
@@ -567,19 +581,23 @@ export default async function AdminRequestsPage({
                               <th className="px-2 py-2">Total Weight (g)</th>
                               <th className="px-2 py-2">Est Time</th>
                               <th className="px-2 py-2">Calculated Cost</th>
-                              <th className="px-2 py-2">Stock Fit</th>
                               <th className="px-2 py-2">Request Notes</th>
                               <th className="px-2 py-2">Submitted</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {stageRows.map(({ request, stockSummary, timeEstimate }) => {
+                            {stageRows.map(({ request, stockSummary, weightBreakdown, timeEstimate }) => {
                               const detailHref = `/admin/requests/${request.id}`;
                               const productExternalUrl = getProductExternalUrl(request.product);
                               const rowLinkClassName = "block h-full px-2 py-3 focus-visible:outline-none";
+                              const rowStockHighlightClassName =
+                                stockSummary.state === "INSUFFICIENT_STOCK" ? "queue-priority-highlight" : "";
 
                               return (
-                                <tr key={request.id} className="border-b border-slate-100 align-top transition-colors hover:bg-slate-50 focus-within:bg-slate-50">
+                                <tr
+                                  key={request.id}
+                                  className={`border-b border-slate-100 align-top transition-colors hover:bg-slate-50 focus-within:bg-slate-50 ${rowStockHighlightClassName}`}
+                                >
                                   <td className="px-2 py-3">
                                     <input
                                       type="checkbox"
@@ -654,6 +672,28 @@ export default async function AdminRequestsPage({
                                         adminNotes={request.adminNotes}
                                         redirectTo={redirectTo}
                                       />
+                                      {stockSummary.state === "INSUFFICIENT_STOCK" ? (
+                                        <HoverInfo
+                                          content={
+                                            <div className="space-y-1">
+                                              <p className="font-medium">{stockSummary.detail}</p>
+                                              <div className="space-y-0.5">
+                                                {stockSummary.detailLines.map((detailLine) => (
+                                                  <p key={detailLine} className="leading-[1.25]">
+                                                    {detailLine}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          }
+                                          align="start"
+                                          panelClassName="max-w-[34rem]"
+                                        >
+                                          <span className="inline-flex cursor-help rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-800">
+                                            Needs Stock
+                                          </span>
+                                        </HoverInfo>
+                                      ) : null}
                                     </div>
                                   </td>
 
@@ -666,7 +706,15 @@ export default async function AdminRequestsPage({
 
                                   <td className="p-0 text-xs text-slate-600">
                                     <Link href={detailHref} className={rowLinkClassName}>
-                                      {formatWeightGrams(request.totalWeightGrams)}
+                                      <HoverInfo
+                                        content={renderWeightBreakdownContent(weightBreakdown)}
+                                        align="start"
+                                        panelClassName="max-w-[28rem]"
+                                      >
+                                        <span className="inline-flex cursor-help underline decoration-dotted underline-offset-2">
+                                          {formatWeightGrams(request.totalWeightGrams)}
+                                        </span>
+                                      </HoverInfo>
                                     </Link>
                                   </td>
 
@@ -686,17 +734,6 @@ export default async function AdminRequestsPage({
                                   <td className="p-0 text-xs text-slate-600">
                                     <Link href={detailHref} className={rowLinkClassName}>
                                       {request.calculatedCost === null ? "—" : formatCurrency(request.calculatedCost)}
-                                    </Link>
-                                  </td>
-
-                                  <td className="p-0 text-xs text-slate-600">
-                                    <Link href={detailHref} className={rowLinkClassName}>
-                                      <span
-                                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${stockBadgeClassName(stockSummary.state)}`}
-                                      >
-                                        {stockBadgeLabel(stockSummary.state)}
-                                      </span>
-                                      <p className="mt-1">{stockSummary.detail}</p>
                                     </Link>
                                   </td>
 
