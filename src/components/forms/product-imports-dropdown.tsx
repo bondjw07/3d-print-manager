@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { BulkProductImportModalForm, type ProductImportMode } from "./bulk-product-import-modal-form";
 import { FilamentWeightCsvImportModalForm } from "./filament-weight-csv-import-modal-form";
+import { ProductCsvImportForm } from "./product-csv-import-form";
 import { Button } from "@/components/ui/button";
 
-type ImportMode = ProductImportMode | "filamentWeightsCsv";
+type ImportMode = ProductImportMode | "filamentWeightsCsv" | "productsCsv";
 
 type ImportOption = {
   mode: ImportMode;
@@ -38,6 +39,11 @@ const importOptions: ImportOption[] = [
     mode: "filamentWeightsCsv",
     label: "Import Filament Weights CSV",
     description: "Upload a model-weight CSV, review fuzzy matches, then apply selected product/filament updates.",
+  },
+  {
+    mode: "productsCsv",
+    label: "Import Products CSV",
+    description: "Upload a MyMiniFactory CSV export and create products in bulk.",
   },
 ];
 
@@ -112,6 +118,8 @@ export function ProductImportsDropdown() {
         <div className="mt-4">
           {selectedMode === "filamentWeightsCsv" ? (
             <FilamentWeightCsvImportModalForm />
+          ) : selectedMode === "productsCsv" ? (
+            <ProductCsvImportForm />
           ) : (
             <BulkProductImportModalForm mode={selectedMode} />
           )}

@@ -82,7 +82,7 @@ export function ProductForm({
         <Select id="creatorId" name="creatorId" defaultValue={creatorSelectDefault}>
           <option value="">No creator</option>
           {hasUnmanagedCurrentCreator ? (
-            <option value="__UNCHANGED__">Keep current creator: {product?.importSourceCreatorName}</option>
+            <option value="__UNCHANGED__">{product?.importSourceCreatorName}</option>
           ) : null}
           {creators.map((creator) => (
             <option key={creator.id} value={creator.id}>

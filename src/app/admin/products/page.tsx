@@ -33,7 +33,7 @@ export default async function AdminProductsPage({
           <CardTitle>Imports</CardTitle>
           <p className="text-sm text-slate-500">
             Start imports from one place. Supported today: Thangs URLs, MyMiniFactory URLs, Thangs creator discovery,
-            and CSV-based filament weight updates with confirmation before apply.
+            MyMiniFactory products CSV upload, and CSV-based filament weight updates with confirmation before apply.
           </p>
         </CardHeader>
         <CardContent>
