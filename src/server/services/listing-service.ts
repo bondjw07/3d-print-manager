@@ -15,6 +15,59 @@ function parseTags(tagsInput: string) {
     .filter(Boolean);
 }
 
+export type ListingIndexFilters = {
+  page?: number;
+  pageSize?: number;
+  view?: "listed" | "unlisted";
+  search?: string;
+  marketplace?: MarketplaceType;
+  status?: ListingStatus;
+};
+
+export async function getListingProductIndex({
+  page = 1,
+  pageSize = 24,
+  view = "listed",
+  search,
+  marketplace,
+  status,
+}: ListingIndexFilters) {
+  const normalizedSearch = search?.trim();
+  const listingWhere = {
+    ...(marketplace ? { marketplaceType: marketplace } : {}),
+    ...(status ? { status } : {}),
+  };
+  const where = {
+    ...(view === "unlisted" ? { listings: { none: {} } } : { listings: { some: listingWhere } }),
+    ...(normalizedSearch
+      ? {
+          OR: [
+            { publicName: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { sku: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { category: { contains: normalizedSearch, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+  const safePage = Math.max(1, page);
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include: {
+        images: { where: { isPrimary: true }, take: 1, orderBy: [{ sortOrder: "asc" }] },
+        // Filter which products qualify, but always load every storefront for the one-row-per-product display.
+        listings: { orderBy: [{ updatedAt: "desc" }] },
+      },
+      orderBy: [{ publicName: "asc" }],
+      skip: (safePage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  return { products, total, page: safePage, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+}
+
 export async function getListings(search?: string) {
   return prisma.marketplaceListing.findMany({
     where: search

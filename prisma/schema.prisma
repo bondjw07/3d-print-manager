@@ -361,6 +361,15 @@ model AppSetting {
   myMiniFactoryOauthStateHash        String?
   myMiniFactoryOauthStateExpiresAt   DateTime?
   myMiniFactoryOauthRedirectUri      String?
+  shopifyShopDomain                  String?
+  shopifyClientIdEncrypted           String?
+  shopifyClientSecretEncrypted       String?
+  shopifyAccessTokenEncrypted        String?
+  shopifyTokenExpiresAt              DateTime?
+  shopifyTokenScope                  String?
+  shopifyConnectedAt                 DateTime?
+  shopifyShopName                    String?
+  publicAppUrl                       String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 }

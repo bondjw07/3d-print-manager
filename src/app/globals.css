@@ -159,6 +159,28 @@ html[data-theme="dark"] .hover\:text-slate-900:hover {
   color: #f1f5f9 !important;
 }
 
+.listing-price-estimate {
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #334155;
+}
+
+html[data-theme="dark"] .listing-price-estimate {
+  border-color: #1e4f72;
+  background: #0b2436;
+  color: #c0cfdf;
+}
+
+.shopify-image-selected {
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+html[data-theme="dark"] .shopify-image-selected {
+  border-color: #1e4f72;
+  background: #0b2436;
+}
+
 .queue-priority-highlight {
   background-color: rgba(254, 226, 226, 0.55);
 }

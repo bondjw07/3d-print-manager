@@ -23,6 +23,14 @@ export async function updateDefaultMarketplace(defaultMarketplace: MarketplaceTy
   });
 }
 
+export async function updatePublicAppUrl(publicAppUrl: string) {
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: { id: "app", defaultMarketplace: "ETSY", publicAppUrl },
+    update: { publicAppUrl },
+  });
+}
+
 export function getProcessingEstimateSettingsFromAppSetting(input: {
   printerCount: unknown;
   printerUtilizationRate: unknown;

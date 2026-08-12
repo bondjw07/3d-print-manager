@@ -334,6 +334,29 @@ export const myMiniFactoryCredentialsSchema = z.object({
   myMiniFactoryClientSecret: z.string().trim().min(4, "Client secret is required."),
 });
 
+const shopifyShopDomainSchema = z.preprocess(
+  (value) =>
+    typeof value === "string"
+      ? value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "")
+      : value,
+  z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/, "Enter a Shopify domain like your-store.myshopify.com."),
+);
+
+export const shopifyCredentialsSchema = z.object({
+  shopifyShopDomain: shopifyShopDomainSchema,
+  shopifyClientId: z.string().trim().min(2, "Shopify client ID is required."),
+  shopifyClientSecret: z.string().trim().min(4, "Shopify client secret is required."),
+});
+
+export const publicAppUrlSchema = z.object({
+  publicAppUrl: z
+    .url("Enter a valid URL.")
+    .refine((value) => value.startsWith("https://"), "Use a public HTTPS URL.")
+    .transform((value) => value.replace(/\/$/, "")),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

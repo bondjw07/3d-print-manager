@@ -1,395 +1,131 @@
 import Image from "next/image";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import {
-  humanizeEnum,
-  listingStatusOptions,
-  marketplaceTypeOptions,
-  productStatusOptions,
-  syncStatusOptions,
-} from "@/lib/domain";
-import {
-  bulkUpdateListingProductControlsAction,
-  createListingAction,
-  runListingActionAction,
-  simulateMarketplaceEventAction,
-  updateListingAction,
-} from "@/server/actions/portal-actions";
-import { getListings } from "@/server/services/listing-service";
-import { getMarketplaceEvents } from "@/server/services/marketplace-event-service";
-import { prisma } from "@/lib/prisma";
+import { humanizeEnum, listingStatusOptions, marketplaceTypeOptions } from "@/lib/domain";
+import { getListingProductIndex } from "@/server/services/listing-service";
+import { ListingStatus, MarketplaceType } from "@/generated/prisma/client";
+
+const PAGE_SIZE = 24;
+
+const marketplaceMarks: Record<MarketplaceType, { label: string; className: string }> = {
+  ETSY: { label: "E", className: "bg-orange-100 text-orange-700 ring-orange-200" },
+  EBAY: { label: "e", className: "bg-blue-100 text-blue-700 ring-blue-200" },
+  SHOPIFY: { label: "S", className: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
+};
 
 export default async function AdminListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; q?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; marketplace?: string; status?: string; page?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const q = params.q?.trim();
-  const redirectTo = q ? `/admin/listings?q=${encodeURIComponent(q)}` : "/admin/listings";
+  const view = params.view === "unlisted" ? "unlisted" : "listed";
+  const marketplace = marketplaceTypeOptions.includes(params.marketplace as MarketplaceType)
+    ? (params.marketplace as MarketplaceType)
+    : undefined;
+  const status = listingStatusOptions.includes(params.status as ListingStatus) ? (params.status as ListingStatus) : undefined;
+  const requestedPage = Number(params.page);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const q = params.q?.trim() ?? "";
+  const result = await getListingProductIndex({ page, pageSize: PAGE_SIZE, view, search: q, marketplace, status });
 
-  const [products, listings, events] = await Promise.all([
-    prisma.product.findMany({ orderBy: { publicName: "asc" } }),
-    getListings(q),
-    getMarketplaceEvents(10),
-  ]);
+  const makeHref = (overrides: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    const values = { view, q, marketplace, status, page: result.page, ...overrides };
+    Object.entries(values).forEach(([key, value]) => {
+      if (value !== undefined && value !== "" && !(key === "page" && value === 1)) query.set(key, String(value));
+    });
+    const value = query.toString();
+    return `/admin/listings${value ? `?${value}` : ""}`;
+  };
 
   return (
     <div className="space-y-4">
       <PageHeader>
         <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Listings</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Marketplace Listing Management</h1>
-        <p className="mt-1 text-sm text-slate-600">Create, update, and run mocked marketplace actions.</p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Marketplace listings</h1>
+        <p className="mt-1 text-sm text-slate-600">Browse products once, then manage every storefront listing from one product workspace.</p>
       </PageHeader>
 
-      {params.error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{params.error}</p>
-      ) : null}
-      {params.success ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p>
-      ) : null}
+      {params.error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{params.error}</p> : null}
+      {params.success ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
+        <Link href={makeHref({ view: "listed", page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "listed" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+          Listed products
+        </Link>
+        <Link href={makeHref({ view: "unlisted", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "unlisted" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+          Unlisted products
+        </Link>
+      </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Create or Upsert Listing</CardTitle>
-          <CardDescription>
-            Product data is the source of truth; listing fields can override title, copy, tags, and pricing.
-          </CardDescription>
+          <CardTitle>{view === "listed" ? "Existing listings" : "Products not listed anywhere"}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form action={createListingAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <input type="hidden" name="redirectTo" value="/admin/listings" />
-            <Select name="productId" defaultValue="" required>
-              <option value="" disabled>
-                Select product
-              </option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.publicName}
-                </option>
-              ))}
-            </Select>
-            <Select name="marketplaceType" defaultValue="ETSY" required>
-              {marketplaceTypeOptions.map((marketplace) => (
-                <option key={marketplace} value={marketplace}>
-                  {humanizeEnum(marketplace)}
-                </option>
-              ))}
-            </Select>
-            <Input name="externalListingId" placeholder="External listing id" />
-            <Input name="title" placeholder="Listing title" required className="lg:col-span-2" />
-            <Input name="price" type="number" step="0.01" min={0} placeholder="Price" required />
-            <Textarea name="description" placeholder="Listing description" required className="sm:col-span-2 lg:col-span-3" />
-            <Input name="tags" placeholder="tags, comma, separated" className="sm:col-span-2" />
-            <Input name="externalUrl" placeholder="https://marketplace.example/listing" />
-            <Select name="status" defaultValue="DRAFT">
-              {listingStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {humanizeEnum(status)}
-                </option>
-              ))}
-            </Select>
-            <Select name="syncStatus" defaultValue="NOT_SYNCED">
-              {syncStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {humanizeEnum(status)}
-                </option>
-              ))}
-            </Select>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <Button type="submit">Save Listing</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Listings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <form className="flex gap-2" action="/admin/listings" method="get">
-            <Input name="q" defaultValue={q ?? ""} placeholder="Search title, product, external id" />
-            <Button type="submit" variant="secondary">
-              Search
-            </Button>
+        <CardContent className="space-y-4">
+          <form action="/admin/listings" method="get" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
+            <input type="hidden" name="view" value={view} />
+            <Input name="q" defaultValue={q} placeholder="Search product, SKU, or category" />
+            {view === "listed" ? (
+              <>
+                <Select name="marketplace" defaultValue={marketplace ?? ""}>
+                  <option value="">All storefronts</option>
+                  {marketplaceTypeOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}
+                </Select>
+                <Select name="status" defaultValue={status ?? ""}>
+                  <option value="">All listing statuses</option>
+                  {listingStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}
+                </Select>
+              </>
+            ) : null}
+            <button type="submit" className="h-10 rounded-xl bg-sky-500 px-4 text-sm font-medium text-slate-950 hover:bg-sky-400">Filter</button>
           </form>
 
-          <form
-            id="bulk-listing-update-form"
-            action={bulkUpdateListingProductControlsAction}
-            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_180px_auto]"
-          >
-            <input type="hidden" name="redirectTo" value={redirectTo} />
-            <p className="flex items-center text-sm text-slate-700 sm:col-span-2 lg:col-span-1">
-              Bulk update selected listings: product status, visibility, and requestability.
-            </p>
-            <Select name="status" defaultValue="ACTIVE">
-              {productStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {humanizeEnum(status)}
-                </option>
-              ))}
-            </Select>
-            <Select name="isPublic" defaultValue="true">
-              <option value="true">Public</option>
-              <option value="false">Private</option>
-            </Select>
-            <Select name="isRequestable" defaultValue="false">
-              <option value="true">Requestable</option>
-              <option value="false">Not requestable</option>
-            </Select>
-            <Button type="submit">Apply to Selected</Button>
-          </form>
+          <p className="text-sm text-slate-500">{result.total} product{result.total === 1 ? "" : "s"} · showing {result.total === 0 ? 0 : (result.page - 1) * PAGE_SIZE + 1}–{Math.min(result.page * PAGE_SIZE, result.total)}</p>
 
           <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-2 py-2">
-                    <span className="sr-only">Select</span>
-                  </th>
-                  <th className="px-2 py-2">Thumb</th>
-                  <th className="px-2 py-2">Product</th>
-                  <th className="px-2 py-2">Marketplace</th>
-                  <th className="px-2 py-2">Price</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">Sync</th>
-                  <th className="px-2 py-2">Actions</th>
+                  <th className="px-3 py-2">Product</th>
+                  <th className="px-3 py-2">Details</th>
+                  <th className="px-3 py-2">Storefronts</th>
+                  <th className="px-3 py-2">Listing status</th>
+                  <th className="px-3 py-2"><span className="sr-only">Manage</span></th>
                 </tr>
               </thead>
               <tbody>
-                {listings.map((listing) => (
-                  <tr key={listing.id} className="border-b border-slate-100 align-top">
-                    <td className="px-2 py-3">
-                      <input
-                        type="checkbox"
-                        name="listingIds"
-                        value={listing.id}
-                        form="bulk-listing-update-form"
-                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                        aria-label={`Select ${listing.product.publicName}`}
-                      />
-                    </td>
-                    <td className="px-2 py-3">
-                      {listing.product.images[0] ? (
-                        <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                          <Image
-                            src={listing.product.images[0].imagePath}
-                            alt={listing.product.publicName}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">
-                          No Image
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-3">
-                      <p className="text-sm font-medium text-slate-900">{listing.product.publicName}</p>
-                      <p className="text-xs text-slate-500">{listing.title}</p>
-                      <div className="mt-1">
-                        <StatusBadge value={listing.product.status} />
-                      </div>
-                    </td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{humanizeEnum(listing.marketplaceType)}</td>
-                    <td className="px-2 py-3 text-sm text-slate-700">{formatCurrency(listing.price.toString())}</td>
-                    <td className="px-2 py-3">
-                      <StatusBadge value={listing.status} />
-                    </td>
-                    <td className="px-2 py-3">
-                      <StatusBadge value={listing.syncStatus} />
-                    </td>
-                    <td className="px-2 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <form action={runListingActionAction}>
-                          <input type="hidden" name="listingId" value={listing.id} />
-                          <input type="hidden" name="redirectTo" value="/admin/listings" />
-                          <input type="hidden" name="action" value="publish" />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Publish
-                          </Button>
-                        </form>
-                        <form action={runListingActionAction}>
-                          <input type="hidden" name="listingId" value={listing.id} />
-                          <input type="hidden" name="redirectTo" value="/admin/listings" />
-                          <input type="hidden" name="action" value="update" />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Update
-                          </Button>
-                        </form>
-                        <form action={runListingActionAction}>
-                          <input type="hidden" name="listingId" value={listing.id} />
-                          <input type="hidden" name="redirectTo" value="/admin/listings" />
-                          <input type="hidden" name="action" value="remove" />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Remove
-                          </Button>
-                        </form>
-                        <form action={runListingActionAction}>
-                          <input type="hidden" name="listingId" value={listing.id} />
-                          <input type="hidden" name="redirectTo" value="/admin/listings" />
-                          <input type="hidden" name="action" value="refresh" />
-                          <Button type="submit" variant="secondary" size="sm">
-                            Refresh
-                          </Button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {result.products.map((product) => {
+                  const activeListings = product.listings.filter((listing) => listing.status === "PUBLISHED");
+                  return (
+                    <tr key={product.id} className="border-b border-slate-100 align-middle">
+                      <td className="px-3 py-3">
+                        <Link href={`/admin/listings/${product.id}`} className="flex min-w-64 items-center gap-3 rounded-lg hover:text-sky-700">
+                          {product.images[0] ? <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"><Image src={product.images[0].imagePath} alt={product.images[0].altText ?? product.publicName} fill className="object-cover" sizes="56px" /></div> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-500">No image</div>}
+                          <span><span className="block font-medium text-slate-900">{product.publicName}</span><span className="block text-xs text-slate-500">{product.sku}</span></span>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-slate-600"><p>{product.category}</p><StatusBadge value={product.status} className="mt-1" /></td>
+                      <td className="px-3 py-3"><div className="flex flex-wrap gap-1.5">{product.listings.length ? product.listings.map((listing) => { const mark = marketplaceMarks[listing.marketplaceType]; return <span key={listing.id} title={humanizeEnum(listing.marketplaceType)} aria-label={humanizeEnum(listing.marketplaceType)} className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ring-1 ${mark.className}`}>{mark.label}</span>; }) : <span className="text-sm text-slate-500">Not listed</span>}</div></td>
+                      <td className="px-3 py-3">{product.listings.length ? <div className="flex flex-wrap gap-1"><StatusBadge value={activeListings.length ? "PUBLISHED" : product.listings[0].status} /><span className="self-center text-xs text-slate-500">{activeListings.length} live / {product.listings.length}</span></div> : <span className="text-sm text-slate-500">—</span>}</td>
+                      <td className="px-3 py-3 text-right"><Link href={`/admin/listings/${product.id}`} className="inline-flex h-8 items-center rounded-xl border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50">Manage</Link></td>
+                    </tr>
+                  );
+                })}
+                {result.products.length === 0 ? <tr><td colSpan={5} className="px-3 py-12 text-center text-sm text-slate-500">No products match these filters.</td></tr> : null}
               </tbody>
             </Table>
           </TableContainer>
 
-          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <h3 className="text-sm font-semibold text-slate-900">Quick Edit Listing</h3>
-            <form action={updateListingAction} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <input type="hidden" name="redirectTo" value="/admin/listings" />
-              <Select name="listingId" defaultValue="" required>
-                <option value="" disabled>
-                  Select listing
-                </option>
-                {listings.map((listing) => (
-                  <option key={listing.id} value={listing.id}>
-                    {listing.product.publicName} - {humanizeEnum(listing.marketplaceType)}
-                  </option>
-                ))}
-              </Select>
-              <Select name="productId" defaultValue={listings[0]?.productId ?? ""} required>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.publicName}
-                  </option>
-                ))}
-              </Select>
-              <Select name="marketplaceType" defaultValue="ETSY" required>
-                {marketplaceTypeOptions.map((marketplace) => (
-                  <option key={marketplace} value={marketplace}>
-                    {humanizeEnum(marketplace)}
-                  </option>
-                ))}
-              </Select>
-              <Input name="externalListingId" placeholder="External listing id" />
-              <Input name="title" placeholder="Title" required className="lg:col-span-2" />
-              <Input name="price" placeholder="Price" type="number" step="0.01" min={0} required />
-              <Input name="externalUrl" placeholder="External URL" />
-              <Textarea name="description" placeholder="Description" required className="sm:col-span-2 lg:col-span-4" />
-              <Input name="tags" placeholder="Tags" className="sm:col-span-2" />
-              <Select name="status" defaultValue="DRAFT">
-                {listingStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {humanizeEnum(status)}
-                  </option>
-                ))}
-              </Select>
-              <Select name="syncStatus" defaultValue="NOT_SYNCED">
-                {syncStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {humanizeEnum(status)}
-                  </option>
-                ))}
-              </Select>
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Button type="submit">Apply Listing Update</Button>
-              </div>
-            </form>
-          </div>
+          {result.totalPages > 1 ? <nav className="flex items-center justify-between" aria-label="Listing pages"><p className="text-sm text-slate-500">Page {result.page} of {result.totalPages}</p><div className="flex gap-2">{result.page > 1 ? <Link href={makeHref({ page: result.page - 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Previous</Link> : null}{result.page < result.totalPages ? <Link href={makeHref({ page: result.page + 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Next</Link> : null}</div></nav> : null}
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Simulate Marketplace Event</CardTitle>
-            <CardDescription>Trigger mocked webhook behavior for operational testing.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={simulateMarketplaceEventAction} className="grid gap-2 sm:grid-cols-2">
-              <input type="hidden" name="redirectTo" value="/admin/listings" />
-              <Select name="marketplaceType" defaultValue="ETSY" required>
-                {marketplaceTypeOptions.map((marketplace) => (
-                  <option key={marketplace} value={marketplace}>
-                    {humanizeEnum(marketplace)}
-                  </option>
-                ))}
-              </Select>
-              <Select name="eventType" defaultValue="SALE_OCCURRED" required>
-                <option value="SALE_OCCURRED">Sale occurred</option>
-                <option value="LISTING_REMOVED">Listing removed</option>
-                <option value="LISTING_CHANGED_EXTERNALLY">Listing changed externally</option>
-              </Select>
-              <Select name="listingId" defaultValue="">
-                <option value="">No related listing</option>
-                {listings.map((listing) => (
-                  <option key={listing.id} value={listing.id}>
-                    {listing.product.publicName} - {humanizeEnum(listing.marketplaceType)}
-                  </option>
-                ))}
-              </Select>
-              <Select name="productId" defaultValue="">
-                <option value="">No related product</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.publicName}
-                  </option>
-                ))}
-              </Select>
-              <Textarea
-                name="payloadSummary"
-                className="sm:col-span-2"
-                defaultValue="Mock payload generated from admin console"
-                required
-              />
-              <div className="sm:col-span-2">
-                <Button type="submit">Process Mock Event</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Event History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TableContainer>
-              <Table>
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="px-2 py-2">Event</th>
-                    <th className="px-2 py-2">Status</th>
-                    <th className="px-2 py-2">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((event) => (
-                    <tr key={event.id} className="border-b border-slate-100">
-                      <td className="px-2 py-2 text-sm text-slate-700">
-                        {humanizeEnum(event.eventType)}
-                        <p className="text-xs text-slate-500">{event.payloadSummary}</p>
-                      </td>
-                      <td className="px-2 py-2">
-                        <StatusBadge value={event.processingStatus} />
-                      </td>
-                      <td className="px-2 py-2 text-xs text-slate-500">{formatDateTime(event.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

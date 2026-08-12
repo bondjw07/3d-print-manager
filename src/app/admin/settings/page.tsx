@@ -20,10 +20,14 @@ import {
   updateProcessingEstimateSettingsAction,
   updateManagedCreatorAction,
   updateMyMiniFactoryCredentialsAction,
+  saveShopifyCredentialsAction,
+  testShopifyConnectionAction,
+  updatePublicAppUrlAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
+import { getShopifyIntegrationStatus } from "@/server/services/shopify-auth-service";
 import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 
 export default async function AdminSettingsPage({
@@ -31,11 +35,12 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, creators] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
     getMyMiniFactoryIntegrationStatus(),
+    getShopifyIntegrationStatus(),
     getManagedCreators(),
   ]);
 
@@ -52,6 +57,50 @@ export default async function AdminSettingsPage({
       {params.success ? (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Public App URL</CardTitle>
+          <CardDescription>Used by Shopify to retrieve selected product images during listing creation.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updatePublicAppUrlAction} className="grid max-w-xl gap-3">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Public HTTPS URL<Input name="publicAppUrl" type="url" defaultValue={settings.publicAppUrl ?? ""} placeholder="https://print.example.com" required /></label>
+            <p className="text-xs text-slate-500">This domain must be publicly reachable over HTTPS so Shopify can download product images.</p>
+            <Button type="submit" className="w-fit">Save Public URL</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Shopify Admin API</CardTitle>
+          <CardDescription>
+            Connect your own Shopify store with a Dev Dashboard app. Credentials are encrypted at rest and access tokens are requested server-side.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            <p>Credentials configured: <span className="font-semibold text-slate-900">{shopifyStatus.hasCredentials ? "Yes" : "No"}</span></p>
+            <p>Store: <span className="font-semibold text-slate-900">{shopifyStatus.shopName ?? shopifyStatus.shopDomain ?? "Not connected"}</span></p>
+            {shopifyStatus.connectedAt ? <p>Last verified: <span className="font-semibold text-slate-900">{shopifyStatus.connectedAt.toLocaleString()}</span></p> : null}
+            {shopifyStatus.scope ? <p className="mt-2 break-words text-xs">Granted scopes: {shopifyStatus.scope}</p> : null}
+          </div>
+          <form action={saveShopifyCredentialsAction} className="grid max-w-xl gap-3">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Shopify store domain<Input name="shopifyShopDomain" defaultValue={shopifyStatus.shopDomain ?? ""} placeholder="your-store.myshopify.com" autoComplete="off" required /></label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Client ID<Input name="shopifyClientId" placeholder="Shopify app client ID" autoComplete="off" required /></label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Client secret<Input name="shopifyClientSecret" type="password" placeholder="Shopify app client secret" autoComplete="new-password" required /></label>
+            <Button type="submit" className="w-fit">Save Shopify Credentials</Button>
+          </form>
+          <form action={testShopifyConnectionAction}>
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <Button type="submit" variant="secondary" disabled={!shopifyStatus.hasCredentials}>Test Connection</Button>
+          </form>
+          <p className="text-xs text-slate-500">In Shopify Dev Dashboard, create and install an app for this store, then grant <code>read_products</code>, <code>write_products</code>, <code>read_publications</code>, and <code>write_publications</code> before using listing sync.</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -87,6 +87,13 @@ export const inventoryModeOptions = Object.values(InventoryMode);
 export const marketplaceTypeOptions = Object.values(MarketplaceType);
 export const listingStatusOptions = Object.values(ListingStatus);
 export const syncStatusOptions = Object.values(SyncStatus);
+export const shopifyCategoryTagOptions = [
+  { label: "Props & Replicas", tag: "props-replicas" },
+  { label: "Collectible Figures", tag: "collectible-figures" },
+  { label: "Gaming Miniatures", tag: "gaming-miniatures" },
+  { label: "Tabletop Terrain", tag: "tabletop-terrain" },
+  { label: "Keychains, Flexis & Fidgets", tag: "keychains-flexis-fidgets" },
+] as const;
 
 const queueStatusToStageMap: Record<QueueStatus, QueueStageKey> = {
   [QueueStatus.PENDING]: "INTAKE",

@@ -5,7 +5,7 @@ import {
   ProductStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { humanizeEnum, productStatusOptions } from "@/lib/domain";
+import { humanizeEnum, productStatusOptions, shopifyCategoryTagOptions } from "@/lib/domain";
 import { localProductImageStorage } from "@/server/storage/local-storage-service";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -45,6 +45,7 @@ import {
 } from "@/server/services/request-service";
 import {
   updateDefaultMarketplace,
+  updatePublicAppUrl,
   updateProcessingEstimateSettings,
 } from "@/server/services/settings-service";
 import { updateUserByAdmin } from "@/server/services/user-service";
@@ -52,6 +53,8 @@ import {
   disconnectMyMiniFactoryOAuth,
   saveMyMiniFactoryClientCredentials,
 } from "@/server/services/myminifactory-auth-service";
+import { saveShopifyClientCredentials, testShopifyConnection } from "@/server/services/shopify-auth-service";
+import { createShopifyProduct, getShopifyPublications } from "@/server/services/shopify-auth-service";
 import {
   addFilamentRequirement,
   bulkUpdateProductControls,
@@ -83,12 +86,14 @@ import {
   productBulkImportSchema,
   processingEstimateSettingsSchema,
   productFormSchema,
+  publicAppUrlSchema,
   queueCreateSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
   requestBulkActionSchema,
   requestCreateSchema,
   requestUserUpdateSchema,
+  shopifyCredentialsSchema,
   managedCreatorDeleteSchema,
   managedCreatorSchema,
   settingsSchema,
@@ -638,11 +643,70 @@ export async function createListingAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   }
 
-  await createListing(parsed.data);
+  if (parsed.data.marketplaceType === "SHOPIFY") {
+    const existing = await prisma.marketplaceListing.findUnique({
+      where: { productId_marketplaceType: { productId: parsed.data.productId, marketplaceType: "SHOPIFY" } },
+      select: { id: true },
+    });
+    if (existing) {
+      redirect(appendStatus(redirectTo, "error", "This product already has a Shopify listing. Edit the existing listing below."));
+    }
+  }
+
+  const selectedImageIds = formData.getAll("imageIds").map(String);
+  const primaryImageId = String(formData.get("primaryImageId") ?? "");
+  const product = await prisma.product.findUnique({ where: { id: parsed.data.productId }, select: { category: true, images: { orderBy: [{ sortOrder: "asc" }] } } });
+  if (!product) redirect(appendStatus(redirectTo, "error", "Product not found."));
+  const selectedImages = product.images.filter((image) => selectedImageIds.includes(image.id));
+  const orderedImages = [...selectedImages].sort((left, right) => Number(right.id === primaryImageId) - Number(left.id === primaryImageId));
+  const appUrl = (await prisma.appSetting.findUnique({ where: { id: "app" }, select: { publicAppUrl: true } }))?.publicAppUrl;
+  if (parsed.data.marketplaceType === "SHOPIFY" && orderedImages.length > 0 && (!appUrl || /^https?:\/\/(localhost|127\.0\.0\.1)/.test(appUrl))) {
+    redirect(appendStatus(redirectTo, "error", "Set the public app URL in Settings before sending product images to Shopify."));
+  }
+
+  // Keep validation that redirects outside the catch below: Next's redirect is
+  // intentionally implemented as a thrown control-flow value.
+  const categoryTag = String(formData.get("shopifyCategoryTag") ?? "");
+  const shopifyProductStatus = String(formData.get("shopifyProductStatus") ?? "DRAFT");
+  const publicationIds = formData.getAll("shopifyPublicationIds").map(String);
+  if (!['ACTIVE', 'DRAFT', 'UNLISTED'].includes(shopifyProductStatus)) {
+    redirect(appendStatus(redirectTo, "error", "Select a valid Shopify product status."));
+  }
+  if (shopifyProductStatus === "DRAFT" && publicationIds.length > 0) {
+    redirect(appendStatus(redirectTo, "error", "A Shopify product must be Active or Unlisted before it can be published to a sales channel."));
+  }
+  const tags = parsed.data.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+  if (shopifyCategoryTagOptions.some((option) => option.tag === categoryTag)) tags.push(categoryTag);
+
+  try {
+    const marketplaceData =
+      parsed.data.marketplaceType === "SHOPIFY"
+        ? await createShopifyProduct({
+            title: parsed.data.title,
+            description: parsed.data.description,
+            tags: [...new Set(tags)],
+            productType: product.category,
+            price: parsed.data.price,
+            status: shopifyProductStatus as "ACTIVE" | "DRAFT" | "UNLISTED",
+            publicationIds,
+            images: orderedImages.map((image) => ({ url: `${appUrl}${image.imagePath}`, alt: image.altText })),
+          })
+        : null;
+    await createListing({
+      ...parsed.data,
+      externalListingId: marketplaceData?.externalListingId ?? parsed.data.externalListingId,
+      externalUrl: marketplaceData?.externalUrl ?? parsed.data.externalUrl,
+      status: parsed.data.marketplaceType === "SHOPIFY" ? (shopifyProductStatus === "DRAFT" ? "DRAFT" : "PUBLISHED") : parsed.data.status,
+      syncStatus: marketplaceData ? "IN_SYNC" : parsed.data.syncStatus,
+    });
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to create listing."));
+  }
   revalidatePath("/admin/listings");
+  revalidatePath(`/admin/listings/${parsed.data.productId}`);
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
-  redirect(appendStatus(redirectTo, "success", "Listing saved."));
+  redirect(appendStatus(redirectTo, "success", parsed.data.marketplaceType === "SHOPIFY" ? "Listing saved and Shopify product created." : "Listing saved."));
 }
 
 export async function updateListingAction(formData: FormData) {
@@ -668,6 +732,7 @@ export async function updateListingAction(formData: FormData) {
   });
 
   revalidatePath("/admin/listings");
+  revalidatePath(`/admin/listings/${parsed.data.productId}`);
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Listing updated."));
 }
@@ -1064,6 +1129,16 @@ export async function updateSettingsAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
 }
 
+export async function updatePublicAppUrlAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = publicAppUrlSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await updatePublicAppUrl(parsed.data.publicAppUrl);
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "Public app URL saved."));
+}
+
 export async function updateProcessingEstimateSettingsAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -1257,6 +1332,44 @@ export async function disconnectMyMiniFactoryOAuthAction(formData: FormData) {
   revalidatePath("/admin/settings");
   redirect(appendStatus(redirectTo, "success", "MyMiniFactory OAuth connection removed."));
 }
+
+export async function saveShopifyCredentialsAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = shopifyCredentialsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+
+  try {
+    await saveShopifyClientCredentials({
+      shopDomain: parsed.data.shopifyShopDomain,
+      clientId: parsed.data.shopifyClientId,
+      clientSecret: parsed.data.shopifyClientSecret,
+    });
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save Shopify credentials."));
+  }
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "Shopify credentials saved. Test the connection to confirm access."));
+}
+
+export async function testShopifyConnectionAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  let shop: Awaited<ReturnType<typeof testShopifyConnection>>;
+  try {
+    shop = await testShopifyConnection();
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to connect to Shopify."));
+  }
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", `Connected to ${shop.name} (${shop.myshopifyDomain}).`));
+}
+
+export async function getShopifyPublicationsAction() {
+  await requireRole("ADMIN");
+  return getShopifyPublications();
+}
+
 
 export async function simulateMarketplaceEventAction(formData: FormData) {
   await requireRole("ADMIN");
