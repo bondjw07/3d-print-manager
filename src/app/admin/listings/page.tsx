@@ -9,6 +9,7 @@ import { ShopifyBulkListingForm } from "@/components/admin/shopify-bulk-listing-
 import { Table, TableContainer } from "@/components/ui/table";
 import { humanizeEnum, listingStatusOptions, marketplaceTypeOptions } from "@/lib/domain";
 import { getListingProductIndex } from "@/server/services/listing-service";
+import { calculateRequestEstimate } from "@/lib/request-estimates";
 import { ListingStatus, MarketplaceType } from "@/generated/prisma/client";
 
 const PAGE_SIZE = 24;
@@ -34,6 +35,10 @@ export default async function AdminListingsPage({
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const q = params.q?.trim() ?? "";
   const result = await getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status });
+  const bulkProducts = result.products.map((product) => ({
+    ...product,
+    suggestedCost: calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost,
+  }));
 
   const makeHref = (overrides: Record<string, string | number | undefined>) => {
     const query = new URLSearchParams();
@@ -93,7 +98,7 @@ export default async function AdminListingsPage({
 
           <p className="text-sm text-slate-500">{result.total} product{result.total === 1 ? "" : "s"} · showing {result.total === 0 ? 0 : (result.page - 1) * PAGE_SIZE + 1}–{Math.min(result.page * PAGE_SIZE, result.total)}</p>
 
-          {view === "bulk" ? <ShopifyBulkListingForm products={result.products} redirectTo={makeHref({})} /> : <TableContainer>
+          {view === "bulk" ? <ShopifyBulkListingForm products={bulkProducts} redirectTo={makeHref({})} /> : <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
