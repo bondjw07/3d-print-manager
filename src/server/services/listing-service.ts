@@ -33,6 +33,17 @@ export async function getListingProductIndex({
   status,
 }: ListingIndexFilters) {
   const normalizedSearch = search?.trim();
+  const tagMatchedProductIds = normalizedSearch
+    ? (await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "Product"
+        WHERE EXISTS (
+          SELECT 1
+          FROM unnest("tags") AS tag
+          WHERE LOWER(tag) = LOWER(${normalizedSearch})
+        )
+      `).map((product) => product.id)
+    : [];
   const listingWhere = {
     ...(marketplace ? { marketplaceType: marketplace } : {}),
     ...(status ? { status } : {}),
@@ -45,7 +56,7 @@ export async function getListingProductIndex({
             { publicName: { contains: normalizedSearch, mode: "insensitive" as const } },
             { sku: { contains: normalizedSearch, mode: "insensitive" as const } },
             { category: { contains: normalizedSearch, mode: "insensitive" as const } },
-            { tags: { has: normalizedSearch } },
+            ...(tagMatchedProductIds.length > 0 ? [{ id: { in: tagMatchedProductIds } }] : []),
           ],
         }
       : {}),
