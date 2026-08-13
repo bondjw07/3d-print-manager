@@ -54,7 +54,9 @@ export async function getListingProductIndex({
     prisma.product.findMany({
       where,
       include: {
-        images: { where: { isPrimary: true }, take: 1, orderBy: [{ sortOrder: "asc" }] },
+        images: view === "unlisted"
+          ? { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }
+          : { where: { isPrimary: true }, take: 1, orderBy: [{ sortOrder: "asc" }] },
         // Filter which products qualify, but always load every storefront for the one-row-per-product display.
         listings: { orderBy: [{ updatedAt: "desc" }] },
       },

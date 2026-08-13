@@ -203,6 +203,14 @@ export const listingFormSchema = z.object({
   syncStatus: z.nativeEnum(SyncStatus),
 });
 
+export const bulkShopifyListingSchema = z.object({
+  productId: z.string().trim().min(1),
+  price: z.coerce.number().positive(),
+  categoryTag: z.string().trim().optional().default(""),
+  imageIds: z.array(z.string().trim().min(1)).default([]),
+  primaryImageId: z.string().trim().optional().default(""),
+});
+
 export const listingBulkProductUpdateSchema = z.object({
   listingIds: z.array(z.string().trim().min(1)).min(1, "Select at least one listing."),
   status: editableProductStatusSchema,

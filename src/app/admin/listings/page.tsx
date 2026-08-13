@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
+import { ShopifyBulkListingForm } from "@/components/admin/shopify-bulk-listing-form";
 import { Table, TableContainer } from "@/components/ui/table";
 import { humanizeEnum, listingStatusOptions, marketplaceTypeOptions } from "@/lib/domain";
 import { getListingProductIndex } from "@/server/services/listing-service";
@@ -24,7 +25,7 @@ export default async function AdminListingsPage({
   searchParams: Promise<{ view?: string; q?: string; marketplace?: string; status?: string; page?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const view = params.view === "unlisted" ? "unlisted" : "listed";
+  const view = params.view === "unlisted" || params.view === "bulk" ? params.view : "listed";
   const marketplace = marketplaceTypeOptions.includes(params.marketplace as MarketplaceType)
     ? (params.marketplace as MarketplaceType)
     : undefined;
@@ -32,7 +33,7 @@ export default async function AdminListingsPage({
   const requestedPage = Number(params.page);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const q = params.q?.trim() ?? "";
-  const result = await getListingProductIndex({ page, pageSize: PAGE_SIZE, view, search: q, marketplace, status });
+  const result = await getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status });
 
   const makeHref = (overrides: Record<string, string | number | undefined>) => {
     const query = new URLSearchParams();
@@ -62,11 +63,14 @@ export default async function AdminListingsPage({
         <Link href={makeHref({ view: "unlisted", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "unlisted" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
           Unlisted products
         </Link>
+        <Link href={makeHref({ view: "bulk", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+          Bulk list
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>{view === "listed" ? "Existing listings" : "Products not listed anywhere"}</CardTitle>
+          <CardTitle>{view === "listed" ? "Existing listings" : view === "bulk" ? "Create Shopify listings in bulk" : "Products not listed anywhere"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <form action="/admin/listings" method="get" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
@@ -89,7 +93,7 @@ export default async function AdminListingsPage({
 
           <p className="text-sm text-slate-500">{result.total} product{result.total === 1 ? "" : "s"} · showing {result.total === 0 ? 0 : (result.page - 1) * PAGE_SIZE + 1}–{Math.min(result.page * PAGE_SIZE, result.total)}</p>
 
-          <TableContainer>
+          {view === "bulk" ? <ShopifyBulkListingForm products={result.products} redirectTo={makeHref({})} /> : <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
@@ -121,7 +125,7 @@ export default async function AdminListingsPage({
                 {result.products.length === 0 ? <tr><td colSpan={5} className="px-3 py-12 text-center text-sm text-slate-500">No products match these filters.</td></tr> : null}
               </tbody>
             </Table>
-          </TableContainer>
+          </TableContainer>}
 
           {result.totalPages > 1 ? <nav className="flex items-center justify-between" aria-label="Listing pages"><p className="text-sm text-slate-500">Page {result.page} of {result.totalPages}</p><div className="flex gap-2">{result.page > 1 ? <Link href={makeHref({ page: result.page - 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Previous</Link> : null}{result.page < result.totalPages ? <Link href={makeHref({ page: result.page + 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Next</Link> : null}</div></nav> : null}
         </CardContent>
