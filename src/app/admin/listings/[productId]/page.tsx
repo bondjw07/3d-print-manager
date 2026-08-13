@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ShopifyImageSelection } from "@/components/admin/shopify-image-selection";
-import { ShopifyPublicationSelection } from "@/components/admin/shopify-publication-selection";
+import { ShopifyPublishingControls } from "@/components/admin/shopify-publishing-controls";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,13 +67,12 @@ export default async function ProductListingWorkspace({
           <input type="hidden" name="productId" value={product.id} /><input type="hidden" name="redirectTo" value={redirectTo} /><input type="hidden" name="marketplaceType" value="SHOPIFY" />
           <label className="grid gap-1 text-sm font-medium text-slate-700">Listing title<Input name="title" defaultValue={product.publicName} required /></label>
           <input type="hidden" name="status" value="DRAFT" />
-          <label className="grid gap-1 text-sm font-medium text-slate-700">Shopify status<Select name="shopifyProductStatus" defaultValue="DRAFT"><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="UNLISTED">Unlisted</option></Select><span className="text-xs font-normal text-slate-500">Controls whether Shopify can make the product available. Unlisted products require a direct link.</span></label>
+          <ShopifyPublishingControls className="md:col-span-2 xl:col-span-3 md:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] md:items-start" />
           <label className="grid gap-1 text-sm font-medium text-slate-700">Shopify category tag<Select name="shopifyCategoryTag" defaultValue=""><option value="">No category tag selected</option>{shopifyCategoryTagOptions.map((option) => <option key={option.tag} value={option.tag}>{option.label}</option>)}</Select></label>
           <label className="grid gap-1 text-sm font-medium text-slate-700">Price<Input name="price" type="number" min={0.01} step="0.01" placeholder="0.00" required /></label>
           <input type="hidden" name="syncStatus" value="NOT_SYNCED" />
           <label className="grid gap-1 text-sm font-medium text-slate-700 md:col-span-2 xl:col-span-3">Description<Textarea name="description" defaultValue={product.fullDescription || product.shortDescription} required /></label>
           <label className="grid gap-1 text-sm font-medium text-slate-700 md:col-span-2 xl:col-span-3">Tags <span className="font-normal text-slate-500">(comma separated)</span><Input name="tags" defaultValue={product.tags.join(", ")} /></label>
-          <ShopifyPublicationSelection />
           <div className="md:col-span-2 xl:col-span-3"><ShopifyImageSelection images={product.images} /></div>
           <div className="xl:col-span-3"><Button type="submit">Create Shopify listing</Button></div>
         </form>

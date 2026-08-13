@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { bulkCreateShopifyListingsAction } from "@/server/actions/portal-actions";
 import { shopifyCategoryTagOptions } from "@/lib/domain";
-import { ShopifyPublicationSelection } from "./shopify-publication-selection";
+import { ShopifyPublishingControls } from "./shopify-publishing-controls";
 
 type Product = {
   id: string; publicName: string; sku: string; category: string; shortDescription: string; fullDescription: string; tags: string[];
@@ -30,11 +30,10 @@ export function ShopifyBulkListingForm({ products, redirectTo }: { products: Pro
     <input type="hidden" name="redirectTo" value={redirectTo} />
     <input type="hidden" name="items" value={JSON.stringify(items)} />
     <div className="sticky bottom-3 z-20 rounded-2xl border border-sky-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-sky-900 dark:bg-slate-900/95">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="min-w-44"><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedCount} selected</p><p className="text-xs text-slate-500">Storefront: Shopify</p></div>
-        <label className="grid gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">Shopify status<select name="shopifyProductStatus" defaultValue="DRAFT" className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950"><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="UNLISTED">Unlisted</option></select></label>
-        <div className="min-w-64 flex-1"><ShopifyPublicationSelection /></div>
-        <button type="submit" disabled={selectedCount === 0} className="h-10 rounded-xl bg-sky-500 px-5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50">Create {selectedCount || ""} Shopify listing{selectedCount === 1 ? "" : "s"}</button>
+      <ShopifyPublishingControls className="sm:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] sm:items-start" />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-sky-100 pt-3 dark:border-sky-950">
+        <div><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedCount} selected</p><p className="text-xs text-slate-500">Storefront: Shopify</p></div>
+        <button type="submit" disabled={selectedCount === 0} className="h-10 whitespace-nowrap rounded-xl bg-sky-500 px-5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50">Create {selectedCount || ""} Shopify listing{selectedCount === 1 ? "" : "s"}</button>
       </div>
     </div>
 
