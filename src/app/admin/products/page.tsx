@@ -204,7 +204,7 @@ export default async function AdminProductsPage({
                     <td className="px-0 py-0">
                       <Link className="block px-2 py-3" href={`/admin/products/${product.id}`}>
                         <p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>
-                        <p className="text-xs text-slate-500">{product.internalName}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span>{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
                       </Link>
                     </td>
                     <td className="px-0 py-0">
