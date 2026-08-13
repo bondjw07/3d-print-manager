@@ -80,7 +80,7 @@ export default async function AdminListingsPage({
         <CardContent className="space-y-4">
           <form action="/admin/listings" method="get" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
             <input type="hidden" name="view" value={view} />
-            <Input name="q" defaultValue={q} placeholder="Search product, SKU, or category" />
+            <Input name="q" defaultValue={q} placeholder="Search product, SKU, category, or tag" />
             {view === "listed" ? (
               <>
                 <Select name="marketplace" defaultValue={marketplace ?? ""}>

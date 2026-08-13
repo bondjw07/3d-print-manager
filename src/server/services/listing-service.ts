@@ -45,6 +45,7 @@ export async function getListingProductIndex({
             { publicName: { contains: normalizedSearch, mode: "insensitive" as const } },
             { sku: { contains: normalizedSearch, mode: "insensitive" as const } },
             { category: { contains: normalizedSearch, mode: "insensitive" as const } },
+            { tags: { has: normalizedSearch } },
           ],
         }
       : {}),
