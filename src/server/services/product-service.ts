@@ -484,6 +484,7 @@ export async function bulkUpdateProductControls(input: {
   status?: ProductStatus;
   isPublic?: boolean;
   isRequestable?: boolean;
+  category?: string;
   creatorSelection?: string;
 }) {
   const uniqueProductIds = Array.from(new Set(input.productIds));
@@ -500,6 +501,9 @@ export async function bulkUpdateProductControls(input: {
   }
   if (input.isRequestable !== undefined) {
     data.isRequestable = input.isRequestable;
+  }
+  if (input.category !== undefined) {
+    data.category = input.category;
   }
 
   const creatorSelection = input.creatorSelection?.trim();

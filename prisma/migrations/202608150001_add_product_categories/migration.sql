@@ -1,0 +1,2 @@
+ALTER TABLE "AppSetting"
+ADD COLUMN "productCategories" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

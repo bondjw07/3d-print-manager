@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 export function ProductForm({
   product,
   creators,
+  categoryOptions,
   currentManagedCreatorId,
   action,
   redirectTo,
@@ -19,6 +20,7 @@ export function ProductForm({
 }: {
   product?: Product;
   creators: Creator[];
+  categoryOptions: string[];
   currentManagedCreatorId?: string | null;
   action: (formData: FormData) => void | Promise<void>;
   redirectTo: string;
@@ -66,7 +68,12 @@ export function ProductForm({
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="category">
           Category
         </label>
-        <Input id="category" name="category" required defaultValue={product?.category ?? ""} />
+        <Select id="category" name="category" required defaultValue={product?.category ?? ""} disabled={categoryOptions.length === 0}>
+          <option value="">{categoryOptions.length ? "Select a category" : "Add categories in Settings first"}</option>
+          {product?.category && !categoryOptions.includes(product.category) ? <option value={product.category}>Current: {product.category} (not configured)</option> : null}
+          {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+        </Select>
+        <p className="mt-1 text-xs text-slate-500">Managed in Admin Settings.</p>
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="tags">

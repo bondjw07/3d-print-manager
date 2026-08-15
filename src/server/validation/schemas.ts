@@ -124,6 +124,7 @@ export const productBulkUpdateSchema = z
     status: editableProductStatusOrUnchangedSchema,
     isPublic: boolLikeOrUnchanged,
     isRequestable: boolLikeOrUnchanged,
+    category: z.string().trim().default("UNCHANGED"),
     creatorSelection: z.preprocess(
       (value) => {
         if (typeof value !== "string") {
@@ -138,7 +139,7 @@ export const productBulkUpdateSchema = z
   })
   .superRefine((value, context) => {
     const hasControlChange =
-      value.status !== undefined || value.isPublic !== undefined || value.isRequestable !== undefined;
+      value.status !== undefined || value.isPublic !== undefined || value.isRequestable !== undefined || value.category !== "UNCHANGED";
     const hasCreatorChange = value.creatorSelection !== "UNCHANGED";
 
     if (!hasControlChange && !hasCreatorChange) {
@@ -310,6 +311,10 @@ export const inventoryStockAddSchema = z.object({
 
 export const settingsSchema = z.object({
   defaultMarketplace: z.nativeEnum(MarketplaceType),
+});
+
+export const productCategoriesSchema = z.object({
+  categories: z.string().max(5000),
 });
 
 const printerUtilizationRateValues = printerUtilizationRateOptions.map((option) => option.value.toString()) as [

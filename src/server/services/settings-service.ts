@@ -31,6 +31,14 @@ export async function updatePublicAppUrl(publicAppUrl: string) {
   });
 }
 
+export async function updateProductCategories(productCategories: string[]) {
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: { id: "app", defaultMarketplace: "ETSY", productCategories },
+    update: { productCategories },
+  });
+}
+
 export function getProcessingEstimateSettingsFromAppSetting(input: {
   printerCount: unknown;
   printerUtilizationRate: unknown;

@@ -45,8 +45,10 @@ import {
 } from "@/server/services/request-service";
 import {
   updateDefaultMarketplace,
+  updateProductCategories,
   updatePublicAppUrl,
   updateProcessingEstimateSettings,
+  getSettings,
 } from "@/server/services/settings-service";
 import { updateUserByAdmin } from "@/server/services/user-service";
 import {
@@ -87,6 +89,7 @@ import {
   productBulkImportSchema,
   processingEstimateSettingsSchema,
   productFormSchema,
+  productCategoriesSchema,
   publicAppUrlSchema,
   queueCreateSchema,
   queueUpdateSchema,
@@ -110,6 +113,13 @@ function appendStatus(path: string, key: "success" | "error", message: string) {
   return `${path}${separator}${key}=${encodeURIComponent(message)}`;
 }
 
+async function ensureManagedProductCategory(category: string) {
+  const settings = await getSettings();
+  if (!settings.productCategories.includes(category)) {
+    throw new Error("Select a category defined in Settings.");
+  }
+}
+
 export async function createProductAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -119,6 +129,9 @@ export async function createProductAction(formData: FormData) {
   if (!parsed.success) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   }
+
+  try { await ensureManagedProductCategory(parsed.data.category); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
 
   const product = await createProduct(parsed.data);
   revalidatePath("/admin/products");
@@ -287,6 +300,9 @@ export async function updateProductAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   }
 
+  try { await ensureManagedProductCategory(parsed.data.category); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
+
   await updateProduct(productId, parsed.data);
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
@@ -358,10 +374,16 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
     isPublic: formData.get("isPublic"),
     isRequestable: formData.get("isRequestable"),
     creatorSelection: formData.get("creatorSelection"),
+    category: formData.get("category"),
   });
 
   if (!parsed.success) {
     redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  if (parsed.data.category !== "UNCHANGED") {
+    try { await ensureManagedProductCategory(parsed.data.category); }
+    catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
   }
 
   let updatedProducts = 0;
@@ -382,6 +404,18 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
       `${updatedProducts} product${updatedProducts === 1 ? "" : "s"} updated.`,
     ),
   );
+}
+
+export async function updateProductCategoriesAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = productCategoriesSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  const categories = [...new Map(parsed.data.categories.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean).map((value) => [value.toLocaleLowerCase(), value])).values()];
+  await updateProductCategories(categories);
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", "Product categories saved."));
 }
 
 export async function addProductFilamentRequirementAction(formData: FormData) {

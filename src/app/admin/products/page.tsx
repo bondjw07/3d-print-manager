@@ -9,9 +9,10 @@ import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox"
 import { Table, TableContainer } from "@/components/ui/table";
 import { ProductImportsDropdown } from "@/components/forms/product-imports-dropdown";
 import { formatDateTime } from "@/lib/utils";
-import { humanizeEnum } from "@/lib/domain";
+import { humanizeEnum, productStatusOptions } from "@/lib/domain";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getAdminProducts } from "@/server/services/product-service";
+import { getSettings } from "@/server/services/settings-service";
 import {
   bulkUpdateProductControlsAction,
 } from "@/server/actions/portal-actions";
@@ -19,12 +20,18 @@ import {
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  const view = params.view === "bulk" ? "bulk" : "catalog";
   const q = params.q?.trim() ?? "";
-  const redirectTo = q ? `/admin/products?q=${encodeURIComponent(q)}` : "/admin/products";
-  const [products, creators] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators()]);
+  const category = params.category?.trim() ?? "";
+  const status = productStatusOptions.includes(params.status as (typeof productStatusOptions)[number]) ? params.status! : "";
+  const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
+  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}) });
+  const redirectTo = `/admin/products?${redirectQuery}`;
+  const [allProducts, creators, settings] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings()]);
+  const products = allProducts.filter((product) => (!category || product.category === category) && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public")));
 
   return (
     <div className="space-y-4">
@@ -61,14 +68,21 @@ export default async function AdminProductsPage({
             </p>
           ) : null}
 
-          <form className="flex gap-2" action="/admin/products" method="get">
+          <div className="flex gap-2 border-b border-slate-200">
+            <Link href="/admin/products" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "catalog" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Product catalog</Link>
+            <Link href="/admin/products?view=bulk" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Bulk update</Link>
+          </div>
+
+          <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_160px_150px_auto]" action="/admin/products" method="get">
+            <input type="hidden" name="view" value={view} />
             <Input name="q" defaultValue={q} placeholder="Search by internal name, public name, or SKU" />
+            {view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="status" defaultValue={status}><option value="">All statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
             <Button type="submit" variant="secondary">
-              Search
+              {view === "bulk" ? "Filter" : "Search"}
             </Button>
           </form>
 
-          <form
+          {view === "bulk" ? <form
             id="bulk-product-update-form"
             action={bulkUpdateProductControlsAction}
             className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
@@ -84,6 +98,16 @@ export default async function AdminProductsPage({
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkCategory">
+                  Category
+                </label>
+                <Select id="bulkCategory" name="category" defaultValue="UNCHANGED">
+                  <option value="UNCHANGED">Keep current category</option>
+                  {settings.productCategories.map((value) => <option key={value} value={value}>Set to {value}</option>)}
+                </Select>
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkStatus">
                   Status
@@ -143,13 +167,13 @@ export default async function AdminProductsPage({
                 )}
               </div>
             </div>
-          </form>
+          </form> : null}
 
           <TableContainer>
             <Table>
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-2 py-2">
+                  {view === "bulk" ? <th className="px-2 py-2">
                     <div className="flex items-center gap-2">
                       <SelectAllFormCheckbox
                         formId="bulk-product-update-form"
@@ -159,7 +183,7 @@ export default async function AdminProductsPage({
                       />
                       <span className="sr-only">Select</span>
                     </div>
-                  </th>
+                  </th> : null}
                   <th className="px-2 py-2">Thumb</th>
                   <th className="px-2 py-2">Product</th>
                   <th className="px-2 py-2">SKU</th>
@@ -173,7 +197,7 @@ export default async function AdminProductsPage({
               <tbody>
                 {products.map((product) => (
                   <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-2 py-3">
+                    {view === "bulk" ? <td className="px-2 py-3">
                       <input
                         type="checkbox"
                         name="productIds"
@@ -182,7 +206,7 @@ export default async function AdminProductsPage({
                         className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                         aria-label={`Select ${product.publicName}`}
                       />
-                    </td>
+                    </td> : null}
                     <td className="px-0 py-0">
                       <Link href={`/admin/products/${product.id}`} className="block px-2 py-3">
                         {product.images[0] ? (

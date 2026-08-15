@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmSubmitModalButton } from "@/components/ui/confirm-submit-modal-button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
 import {
@@ -23,6 +24,7 @@ import {
   saveShopifyCredentialsAction,
   testShopifyConnectionAction,
   updatePublicAppUrlAction,
+  updateProductCategoriesAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
@@ -123,6 +125,21 @@ export default async function AdminSettingsPage({
             <Button type="submit" className="w-fit">
               Save Settings
             </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Product Categories</CardTitle>
+          <CardDescription>Define the category choices used by product forms and bulk updates.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateProductCategoriesAction} className="grid max-w-2xl gap-3">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Categories<Textarea name="categories" defaultValue={settings.productCategories.join("\n")} placeholder={"Props & Replicas\nCollectible Figures\nGaming Miniatures"} /></label>
+            <p className="text-xs text-slate-500">Enter one category per line or separate them with commas. Product categories are selected from this list, not entered free-form.</p>
+            <Button type="submit" className="w-fit">Save Product Categories</Button>
           </form>
         </CardContent>
       </Card>

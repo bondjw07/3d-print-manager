@@ -5,13 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createProductAction } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
+import { getSettings } from "@/server/services/settings-service";
 
 export default async function NewProductPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, creators] = await Promise.all([searchParams, getManagedCreators()]);
+  const [params, creators, settings] = await Promise.all([searchParams, getManagedCreators(), getSettings()]);
 
   return (
     <div className="space-y-4">
@@ -37,6 +38,7 @@ export default async function NewProductPage({
 
           <ProductForm
             creators={creators}
+            categoryOptions={settings.productCategories}
             action={createProductAction}
             redirectTo="/admin/products/new"
             submitLabel="Create Product"

@@ -370,6 +370,7 @@ model AppSetting {
   shopifyConnectedAt                 DateTime?
   shopifyShopName                    String?
   publicAppUrl                       String?
+  productCategories                  String[]        @default([])
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 }
