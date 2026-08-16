@@ -40,7 +40,19 @@ export default async function AdminListingsPage({
     getShopifyCategoryTagMappings(),
   ]);
   const bulkProducts = result.products.map((product) => ({
-    ...product,
+    id: product.id,
+    publicName: product.publicName,
+    sku: product.sku,
+    category: product.category,
+    shortDescription: product.shortDescription,
+    fullDescription: product.fullDescription,
+    tags: product.tags,
+    images: product.images.map((image) => ({
+      id: image.id,
+      imagePath: image.imagePath,
+      altText: image.altText,
+      isPrimary: image.isPrimary,
+    })),
     suggestedCost: calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost,
     suggestedPrice: product.pricingTier?.suggestedPrice.toString() ?? "",
     defaultCategoryTag: getShopifyCategoryTagForProductCategory(product.category, shopifyCategoryMappings),

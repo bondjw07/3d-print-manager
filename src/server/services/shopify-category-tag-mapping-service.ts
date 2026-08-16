@@ -13,5 +13,6 @@ export async function saveShopifyCategoryTagMapping(category: string, categoryTa
 }
 
 export function getShopifyCategoryTagForProductCategory(category: string, mappings: Array<{ category: string; categoryTag: string }>) {
-  return mappings.find((mapping) => mapping.category === category)?.categoryTag ?? "";
+  const normalizedCategory = category.trim().toLocaleLowerCase();
+  return mappings.find((mapping) => mapping.category.trim().toLocaleLowerCase() === normalizedCategory)?.categoryTag ?? "";
 }
