@@ -43,3 +43,10 @@ export async function ensurePricingTierForCategory(pricingTierId: string | null 
   if (!tier || tier.category !== category) throw new Error("Select a pricing tier configured for this product category.");
   return tier.id;
 }
+
+export async function ensurePricingTierForProducts(pricingTierId: string, productIds: string[]) {
+  const tier = await prisma.pricingTier.findUnique({ where: { id: pricingTierId }, select: { category: true } });
+  if (!tier) throw new Error("Selected pricing tier was not found.");
+  const qualifyingCount = await prisma.product.count({ where: { id: { in: productIds }, category: tier.category } });
+  if (qualifyingCount !== productIds.length) throw new Error(`Only products in ${tier.category} can use this pricing tier.`);
+}

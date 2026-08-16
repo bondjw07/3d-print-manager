@@ -230,6 +230,7 @@ export async function getAdminProducts(search?: string) {
       queueItems: { where: { status: { not: "COMPLETED" } } },
       inventoryRecord: true,
       pricingTier: true,
+      filamentRequirements: { include: { filament: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -491,6 +492,7 @@ export async function bulkUpdateProductControls(input: {
   isPublic?: boolean;
   isRequestable?: boolean;
   category?: string;
+  pricingTierId?: string;
   tagsToAdd?: string;
   creatorSelection?: string;
 }) {
@@ -499,7 +501,7 @@ export async function bulkUpdateProductControls(input: {
     return 0;
   }
 
-  const data: Prisma.ProductUpdateManyMutationInput = {};
+  const data: Prisma.ProductUncheckedUpdateManyInput = {};
   if (input.status !== undefined) {
     data.status = input.status;
   }
@@ -511,6 +513,9 @@ export async function bulkUpdateProductControls(input: {
   }
   if (input.category !== undefined) {
     data.category = input.category;
+  }
+  if (input.pricingTierId !== undefined) {
+    data.pricingTierId = input.pricingTierId;
   }
 
   const creatorSelection = input.creatorSelection?.trim();

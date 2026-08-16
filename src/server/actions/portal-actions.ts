@@ -72,7 +72,7 @@ import {
   updateProduct,
 } from "@/server/services/product-service";
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
-import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, updatePricingTier } from "@/server/services/pricing-tier-service";
+import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -383,6 +383,7 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
     isRequestable: formData.get("isRequestable"),
     creatorSelection: formData.get("creatorSelection"),
     category: formData.get("category"),
+    pricingTierId: formData.get("pricingTierId"),
     tagsToAdd: formData.get("tagsToAdd"),
   });
 
@@ -394,10 +395,17 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
     try { await ensureManagedProductCategory(parsed.data.category); }
     catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
   }
+  if (parsed.data.pricingTierId !== "UNCHANGED") {
+    try { await ensurePricingTierForProducts(parsed.data.pricingTierId, parsed.data.productIds); }
+    catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
+  }
 
   let updatedProducts = 0;
   try {
-    updatedProducts = await bulkUpdateProductControls(parsed.data);
+    updatedProducts = await bulkUpdateProductControls({
+      ...parsed.data,
+      pricingTierId: parsed.data.pricingTierId === "UNCHANGED" ? undefined : parsed.data.pricingTierId,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to bulk update products.";
     redirect(appendStatus(redirectTo, "error", message));

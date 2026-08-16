@@ -9,12 +9,15 @@ import { StatusBadge } from "@/components/ui/badge";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
 import { ProductImportsDropdown } from "@/components/forms/product-imports-dropdown";
+import { BulkPricingTierSelector } from "@/components/admin/bulk-pricing-tier-selector";
 import { HoverInfo } from "@/components/ui/hover-info";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { humanizeEnum, productStatusOptions } from "@/lib/domain";
+import { calculateRequestEstimate } from "@/lib/request-estimates";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getAdminProducts } from "@/server/services/product-service";
 import { getSettings } from "@/server/services/settings-service";
+import { getPricingTiers } from "@/server/services/pricing-tier-service";
 import {
   bulkUpdateProductControlsAction,
 } from "@/server/actions/portal-actions";
@@ -32,7 +35,7 @@ export default async function AdminProductsPage({
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
   const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}) });
   const redirectTo = `/admin/products?${redirectQuery}`;
-  const [allProducts, creators, settings] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings()]);
+  const [allProducts, creators, settings, pricingTiers] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings(), getPricingTiers()]);
   const products = allProducts.filter((product) => {
     const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() : product.category === category);
     return matchesCategory && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
@@ -174,6 +177,7 @@ export default async function AdminProductsPage({
                 <Input id="bulkTagsToAdd" name="tagsToAdd" placeholder="Seasonal, fantasy" />
                 <p className="mt-1 text-xs text-slate-500">Comma-separated. Existing tags are kept and duplicates are skipped.</p>
               </div>
+              <BulkPricingTierSelector tiers={pricingTiers.map((tier) => ({ id: tier.id, category: tier.category, label: tier.label }))} />
             </div>
           </form> : null}
 
@@ -198,13 +202,14 @@ export default async function AdminProductsPage({
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2">Visibility</th>
                   <th className="px-2 py-2">Requestable</th>
+                  {view === "bulk" ? <><th className="px-2 py-2">Tier</th><th className="px-2 py-2">Est. cost</th></> : null}
                   <th className="px-2 py-2">Inventory</th>
                   <th className="px-2 py-2">Updated</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((product) => (
-                  <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={product.id} data-bulk-product-row={view === "bulk" ? "" : undefined} data-bulk-product-category={view === "bulk" ? product.category : undefined} className="border-b border-slate-100 hover:bg-slate-50">
                     {view === "bulk" ? <td className="px-2 py-3">
                       <input
                         type="checkbox"
@@ -259,6 +264,7 @@ export default async function AdminProductsPage({
                         {product.isRequestable ? "Yes" : "No"}
                       </Link>
                     </td>
+                    {view === "bulk" ? <><td className="px-0 py-0"><Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-xs text-slate-600">{product.pricingTier?.label ?? "No tier"}</Link></td><td className="px-0 py-0"><Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-xs text-slate-600">{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }); return estimate.calculatedCost === null ? "—" : formatCurrency(estimate.calculatedCost); })()}</Link></td></> : null}
                     <td className="px-0 py-0">
                       <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-sm text-slate-600">
                         {product.inventoryRecord ? `${product.inventoryRecord.available} available` : "No record"}

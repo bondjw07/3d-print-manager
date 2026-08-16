@@ -28,7 +28,7 @@ export function SelectAllFormCheckbox({
   const checkboxRef = useRef<HTMLInputElement | null>(null);
 
   const syncCheckedCount = useCallback(() => {
-    const checkboxes = getTargetCheckboxes(formId, inputName);
+    const checkboxes = getTargetCheckboxes(formId, inputName).filter((checkbox) => !checkbox.disabled);
     setCheckedCount(checkboxes.filter((checkbox) => checkbox.checked).length);
   }, [formId, inputName]);
 
@@ -55,20 +55,22 @@ export function SelectAllFormCheckbox({
       return;
     }
 
-    checkboxRef.current.indeterminate = checkedCount > 0 && checkedCount < totalCount;
-  }, [checkedCount, totalCount]);
+    const availableCount = getTargetCheckboxes(formId, inputName).filter((checkbox) => !checkbox.disabled).length;
+    checkboxRef.current.indeterminate = checkedCount > 0 && checkedCount < availableCount;
+  }, [checkedCount, formId, inputName]);
 
-  const isAllSelected = totalCount > 0 && checkedCount === totalCount;
+  const availableCount = typeof document === "undefined" ? totalCount : getTargetCheckboxes(formId, inputName).filter((checkbox) => !checkbox.disabled).length;
+  const isAllSelected = availableCount > 0 && checkedCount === availableCount;
 
   const handleToggle = () => {
     const shouldSelectAll = !isAllSelected;
-    const checkboxes = getTargetCheckboxes(formId, inputName);
+    const checkboxes = getTargetCheckboxes(formId, inputName).filter((checkbox) => !checkbox.disabled);
 
     checkboxes.forEach((checkbox) => {
       checkbox.checked = shouldSelectAll;
     });
 
-    setCheckedCount(shouldSelectAll ? totalCount : 0);
+    setCheckedCount(shouldSelectAll ? checkboxes.length : 0);
   };
 
   return (
