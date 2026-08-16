@@ -14,6 +14,8 @@ import {
 } from "@/lib/processing-time-estimates";
 import {
   createManagedCreatorAction,
+  createPricingTierAction,
+  deletePricingTierAction,
   deleteManagedCreatorAction,
   deleteAllFilamentsAction,
   deleteAllProductsAction,
@@ -25,26 +27,31 @@ import {
   testShopifyConnectionAction,
   updatePublicAppUrlAction,
   updateProductCategoriesAction,
+  updatePricingTierAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
 import { getShopifyIntegrationStatus } from "@/server/services/shopify-auth-service";
 import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
+import { getPricingTiers } from "@/server/services/pricing-tier-service";
 
 export default async function AdminSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
     getMyMiniFactoryIntegrationStatus(),
     getShopifyIntegrationStatus(),
     getManagedCreators(),
+    getPricingTiers(),
   ]);
+  const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
+  const tabClass = (name: string) => `rounded-t-xl px-4 py-2 text-sm font-medium ${tab === name ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`;
 
   return (
     <div className="space-y-4">
@@ -60,7 +67,14 @@ export default async function AdminSettingsPage({
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p>
       ) : null}
 
-      <Card>
+      <div className="flex gap-2 border-b border-slate-200">
+        <a href="/admin/settings?tab=catalog" className={tabClass("catalog")}>Catalog & pricing</a>
+        <a href="/admin/settings?tab=marketplace" className={tabClass("marketplace")}>Marketplace</a>
+        <a href="/admin/settings?tab=integrations" className={tabClass("integrations")}>Integrations</a>
+        <a href="/admin/settings?tab=operations" className={tabClass("operations")}>Operations</a>
+      </div>
+
+      <Card className={tab === "marketplace" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Public App URL</CardTitle>
           <CardDescription>Used by Shopify to retrieve selected product images during listing creation.</CardDescription>
@@ -75,7 +89,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "marketplace" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Shopify Admin API</CardTitle>
           <CardDescription>
@@ -104,7 +118,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "marketplace" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Default Marketplace</CardTitle>
           <CardDescription>
@@ -129,7 +143,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "catalog" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Product Categories</CardTitle>
           <CardDescription>Define the category choices used by product forms and bulk updates.</CardDescription>
@@ -144,7 +158,41 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "catalog" ? "" : "hidden"}>
+        <CardHeader>
+          <CardTitle>Pricing Tiers</CardTitle>
+          <CardDescription>Set the category-specific pricing choices available on products. The selected tier pre-fills a new listing price and can still be overridden per listing.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form action={createPricingTierAction} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_auto]">
+            <input type="hidden" name="redirectTo" value="/admin/settings" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Category<Select name="category" required defaultValue=""><option value="" disabled>Select category</option>{settings.productCategories.map((category) => <option key={category} value={category}>{category}</option>)}</Select></label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Tier label<Input name="label" placeholder="Small — Dagger" required /></label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Suggested price<Input name="suggestedPrice" type="number" min={0.01} step="0.01" placeholder="0.00" required /></label>
+            <div className="flex items-end"><Button type="submit">Add tier</Button></div>
+          </form>
+
+          {pricingTiers.length === 0 ? <p className="text-sm text-slate-500">Add a tier for each category you want to price consistently.</p> : <div className="space-y-3">
+            {pricingTiers.map((tier) => <div key={tier.id} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[180px_minmax(0,1fr)_140px_auto_auto]">
+              <form action={updatePricingTierAction} className="contents">
+                <input type="hidden" name="redirectTo" value="/admin/settings" />
+                <input type="hidden" name="id" value={tier.id} />
+                <p className="pt-2 text-sm font-medium text-slate-600">{tier.category}</p>
+                <label className="grid gap-1 text-sm font-medium text-slate-800"><span className="sr-only">Tier label</span><Input name="label" defaultValue={tier.label} required /></label>
+                <label className="grid gap-1 text-sm font-medium text-slate-800"><span className="sr-only">Suggested price</span><Input name="suggestedPrice" type="number" min={0.01} step="0.01" defaultValue={tier.suggestedPrice.toString()} required /></label>
+                <div className="flex items-end"><Button type="submit" variant="secondary">Save</Button></div>
+              </form>
+              <form action={deletePricingTierAction} className="flex items-end">
+                <input type="hidden" name="redirectTo" value="/admin/settings" />
+                <input type="hidden" name="id" value={tier.id} />
+                <ConfirmSubmitModalButton variant="danger" confirmTitle="Delete pricing tier?" confirmMessage={`Products using “${tier.label}” will lose their tier, but their existing listing prices will not change.`} confirmLabel="Delete">Delete</ConfirmSubmitModalButton>
+              </form>
+            </div>)}
+          </div>}
+        </CardContent>
+      </Card>
+
+      <Card className={tab === "operations" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Print Time Estimation</CardTitle>
           <CardDescription>
@@ -259,7 +307,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "integrations" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Integration Notes</CardTitle>
         </CardHeader>
@@ -271,7 +319,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "catalog" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Managed Creators</CardTitle>
           <CardDescription>
@@ -317,7 +365,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tab === "integrations" ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>MyMiniFactory OAuth</CardTitle>
           <CardDescription>
@@ -410,7 +458,7 @@ export default async function AdminSettingsPage({
         </CardContent>
       </Card>
 
-      <Card className="border-rose-200">
+      <Card className={tab === "operations" ? "border-rose-200" : "hidden border-rose-200"}>
         <CardHeader>
           <CardTitle className="text-rose-700">Bulk Operations (Danger Zone)</CardTitle>
           <CardDescription className="text-rose-700">

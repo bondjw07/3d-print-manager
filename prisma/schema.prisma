@@ -138,6 +138,7 @@ model Product {
   shortDescription String
   fullDescription  String
   category         String
+  pricingTierId    String?
   tags             String[]
   sku              String        @unique
   status           ProductStatus @default(DRAFT)
@@ -168,11 +169,28 @@ model Product {
   queueItems           QueueItem[]
   inventoryRecord      InventoryRecord?
   marketplaceEvents    MarketplaceEvent[]
+  pricingTier          PricingTier? @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
 
   @@index([status, isPublic])
   @@index([category])
+  @@index([pricingTierId])
   @@unique([importSource, importSourceReferenceId])
   @@unique([importSource, importSourceNormalizedUrl])
+}
+
+model PricingTier {
+  id             String   @id @default(cuid())
+  category       String
+  label          String
+  suggestedPrice Decimal  @db.Decimal(10, 2)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products Product[]
+
+  @@unique([category, label])
+  @@index([category, sortOrder])
 }
 
 model ProductImage {

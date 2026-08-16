@@ -229,6 +229,7 @@ export async function getAdminProducts(search?: string) {
       requests: true,
       queueItems: { where: { status: { not: "COMPLETED" } } },
       inventoryRecord: true,
+      pricingTier: true,
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -278,6 +279,7 @@ export async function getProductByIdForAdmin(id: string) {
       },
       queueItems: { orderBy: { createdAt: "desc" }, take: 10 },
       inventoryRecord: true,
+      pricingTier: true,
       filamentRequirements: {
         include: { filament: true },
         orderBy: { sortOrder: "asc" },
@@ -312,6 +314,7 @@ export async function createProduct(data: {
   shortDescription: string;
   fullDescription: string;
   category: string;
+  pricingTierId?: string | null;
   tags: string;
   sku: string;
   status: ProductStatus;
@@ -355,6 +358,7 @@ export async function createProduct(data: {
     shortDescription: data.shortDescription,
     fullDescription: data.fullDescription,
     category: data.category,
+    pricingTierId: data.pricingTierId,
     tags: parseTags(data.tags),
     sku: data.sku,
     status: data.status,
@@ -412,6 +416,7 @@ export async function updateProduct(
     shortDescription: string;
     fullDescription: string;
     category: string;
+    pricingTierId: string | null;
     tags: string;
     sku: string;
     status: ProductStatus;
@@ -433,7 +438,7 @@ export async function updateProduct(
 ) {
   const baseSlug = slugify(data.publicName);
   const slug = await ensureUniqueSlug(baseSlug, productId);
-  const creatorUpdate: Prisma.ProductUpdateInput = {};
+  const creatorUpdate: Prisma.ProductUncheckedUpdateInput = {};
 
   if (typeof data.creatorId === "string") {
     const managedCreator = await resolveManagedCreatorFields(data.creatorId);
@@ -456,6 +461,7 @@ export async function updateProduct(
       shortDescription: data.shortDescription,
       fullDescription: data.fullDescription,
       category: data.category,
+      pricingTierId: data.pricingTierId,
       tags: parseTags(data.tags),
       sku: data.sku,
       status: data.status,

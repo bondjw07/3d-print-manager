@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { createProductAction } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getSettings } from "@/server/services/settings-service";
+import { getPricingTiers } from "@/server/services/pricing-tier-service";
 
 export default async function NewProductPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const [params, creators, settings] = await Promise.all([searchParams, getManagedCreators(), getSettings()]);
+  const [params, creators, settings, pricingTiers] = await Promise.all([searchParams, getManagedCreators(), getSettings(), getPricingTiers()]);
 
   return (
     <div className="space-y-4">
@@ -39,6 +40,7 @@ export default async function NewProductPage({
           <ProductForm
             creators={creators}
             categoryOptions={settings.productCategories}
+            pricingTiers={pricingTiers}
             action={createProductAction}
             redirectTo="/admin/products/new"
             submitLabel="Create Product"

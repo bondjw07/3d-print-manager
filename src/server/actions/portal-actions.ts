@@ -72,6 +72,7 @@ import {
   updateProduct,
 } from "@/server/services/product-service";
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
+import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, updatePricingTier } from "@/server/services/pricing-tier-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -88,6 +89,9 @@ import {
   productBulkUpdateSchema,
   productBulkImportSchema,
   processingEstimateSettingsSchema,
+  pricingTierCreateSchema,
+  pricingTierDeleteSchema,
+  pricingTierUpdateSchema,
   productFormSchema,
   productCategoriesSchema,
   publicAppUrlSchema,
@@ -132,6 +136,8 @@ export async function createProductAction(formData: FormData) {
 
   try { await ensureManagedProductCategory(parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
+  try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
   const product = await createProduct(parsed.data);
   revalidatePath("/admin/products");
@@ -302,6 +308,8 @@ export async function updateProductAction(formData: FormData) {
 
   try { await ensureManagedProductCategory(parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid category.")); }
+  try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
   await updateProduct(productId, parsed.data);
   revalidatePath("/admin/products");
@@ -416,6 +424,45 @@ export async function updateProductCategoriesAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/products");
   redirect(appendStatus(redirectTo, "success", "Product categories saved."));
+}
+
+export async function createPricingTierAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = pricingTierCreateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  let created = false;
+  try { await ensureManagedProductCategory(parsed.data.category); ({ created } = await createPricingTier(parsed.data)); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to create pricing tier.")); }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", created ? "Pricing tier created." : "That pricing tier already exists."));
+}
+
+export async function updatePricingTierAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = pricingTierUpdateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  try { await updatePricingTier(parsed.data); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save pricing tier.")); }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/listings");
+  redirect(appendStatus(redirectTo, "success", "Pricing tier saved."));
+}
+
+export async function deletePricingTierAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings");
+  const parsed = pricingTierDeleteSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  try { await deletePricingTier(parsed.data.id); }
+  catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to delete pricing tier.")); }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/listings");
+  redirect(appendStatus(redirectTo, "success", "Pricing tier deleted. Products using it now have no tier."));
 }
 
 export async function addProductFilamentRequirementAction(formData: FormData) {

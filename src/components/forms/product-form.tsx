@@ -1,4 +1,4 @@
-import type { Creator, Product } from "@/generated/prisma/client";
+import type { Creator, PricingTier, Product } from "@/generated/prisma/client";
 import {
   inventoryModeOptions,
   productStatusOptions,
@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ProductCategoryPricingFields } from "./product-category-pricing-fields";
 
 export function ProductForm({
   product,
   creators,
   categoryOptions,
+  pricingTiers,
   currentManagedCreatorId,
   action,
   redirectTo,
@@ -21,6 +23,7 @@ export function ProductForm({
   product?: Product;
   creators: Creator[];
   categoryOptions: string[];
+  pricingTiers: PricingTier[];
   currentManagedCreatorId?: string | null;
   action: (formData: FormData) => void | Promise<void>;
   redirectTo: string;
@@ -64,17 +67,12 @@ export function ProductForm({
         <Textarea id="fullDescription" name="fullDescription" required defaultValue={product?.fullDescription ?? ""} />
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="category">
-          Category
-        </label>
-        <Select id="category" name="category" required defaultValue={product?.category ?? ""} disabled={categoryOptions.length === 0}>
-          <option value="">{categoryOptions.length ? "Select a category" : "Add categories in Settings first"}</option>
-          {product?.category && !categoryOptions.includes(product.category) ? <option value={product.category}>Current: {product.category} (not configured)</option> : null}
-          {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
-        </Select>
-        <p className="mt-1 text-xs text-slate-500">Managed in Admin Settings.</p>
-      </div>
+      <ProductCategoryPricingFields
+        categoryOptions={categoryOptions}
+        pricingTiers={pricingTiers.map((tier) => ({ ...tier, suggestedPrice: tier.suggestedPrice.toString() }))}
+        initialCategory={product?.category ?? ""}
+        initialPricingTierId={product?.pricingTierId ?? ""}
+      />
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="tags">
           Tags (comma-separated)

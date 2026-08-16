@@ -50,6 +50,11 @@ const productFormCreatorSelection = z.preprocess(
   z.string().min(1).nullable().optional(),
 );
 
+const pricingTierSelection = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() ? value.trim() : null),
+  z.string().min(1).nullable(),
+);
+
 const optionalNumber = z.preprocess(
   (value) => {
     if (value === "" || value === null || value === undefined) {
@@ -101,6 +106,7 @@ export const productFormSchema = z.object({
   shortDescription: z.string().trim().min(5).max(180),
   fullDescription: z.string().trim().min(10),
   category: z.string().trim().min(2),
+  pricingTierId: pricingTierSelection,
   tags: z.string().trim().optional().default(""),
   creatorId: productFormCreatorSelection,
   sku: z.string().trim().min(3),
@@ -316,6 +322,20 @@ export const settingsSchema = z.object({
 export const productCategoriesSchema = z.object({
   categories: z.string().max(5000),
 });
+
+export const pricingTierCreateSchema = z.object({
+  category: z.string().trim().min(2),
+  label: z.string().trim().min(2).max(80),
+  suggestedPrice: z.coerce.number().positive().max(100000),
+});
+
+export const pricingTierUpdateSchema = z.object({
+  id: z.string().trim().min(1),
+  label: z.string().trim().min(2).max(80),
+  suggestedPrice: z.coerce.number().positive().max(100000),
+});
+
+export const pricingTierDeleteSchema = z.object({ id: z.string().trim().min(1) });
 
 const printerUtilizationRateValues = printerUtilizationRateOptions.map((option) => option.value.toString()) as [
   string,

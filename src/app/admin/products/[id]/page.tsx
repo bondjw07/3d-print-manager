@@ -32,6 +32,7 @@ import {
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getProductByIdForAdmin } from "@/server/services/product-service";
 import { getSettings } from "@/server/services/settings-service";
+import { getPricingTiers } from "@/server/services/pricing-tier-service";
 
 export default async function ProductDetailAdminPage({
   params,
@@ -47,13 +48,14 @@ export default async function ProductDetailAdminPage({
     notFound();
   }
 
-  const [filaments, creators, settings] = await Promise.all([
+  const [filaments, creators, settings, pricingTiers] = await Promise.all([
     prisma.filament.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
     getManagedCreators(),
     getSettings(),
+    getPricingTiers(),
   ]);
 
   const normalizedProductCreatorName = product.importSourceCreatorName?.trim().toLowerCase();
@@ -113,6 +115,7 @@ export default async function ProductDetailAdminPage({
               product={product}
               creators={creators}
               categoryOptions={settings.productCategories}
+              pricingTiers={pricingTiers}
               currentManagedCreatorId={currentManagedCreatorId}
               action={updateProductAction}
               redirectTo={`/admin/products/${product.id}`}
