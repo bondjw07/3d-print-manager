@@ -23,40 +23,36 @@ export default async function AdminProductsPage({
   searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const view = params.view === "bulk" ? "bulk" : "catalog";
+  const view = params.view === "bulk" || params.view === "imports" ? params.view : "catalog";
   const q = params.q?.trim() ?? "";
-  const category = params.category?.trim() ?? "";
+  const category = params.category === "__NONE__" ? "__NONE__" : params.category?.trim() ?? "";
   const status = productStatusOptions.includes(params.status as (typeof productStatusOptions)[number]) ? params.status! : "";
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
   const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}) });
   const redirectTo = `/admin/products?${redirectQuery}`;
   const [allProducts, creators, settings] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings()]);
-  const products = allProducts.filter((product) => (!category || product.category === category) && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public")));
+  const products = allProducts.filter((product) => {
+    const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() : product.category === category);
+    return matchesCategory && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
+  });
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <CardTitle>Imports</CardTitle>
-          <p className="text-sm text-slate-500">
-            Start imports from one place. Supported today: Thangs URLs, MyMiniFactory URLs, Thangs creator discovery,
-            MyMiniFactory products CSV upload, and CSV-based filament weight updates with confirmation before apply.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <ProductImportsDropdown />
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
-            <CardTitle>Product Catalog</CardTitle>
-            <p className="text-sm text-slate-500">Manage product data, visibility, and lifecycle status.</p>
+            <CardTitle>{view === "imports" ? "Imports" : "Product Catalog"}</CardTitle>
+            <p className="text-sm text-slate-500">
+              {view === "imports"
+                ? "Start imports from one place. Supported today: Thangs URLs, MyMiniFactory URLs, creator discovery, product CSV uploads, and filament-weight CSV updates."
+                : "Manage product data, visibility, and lifecycle status."}
+            </p>
           </div>
-          <Link href="/admin/products/new">
-            <Button>Create Product</Button>
-          </Link>
+          {view !== "imports" ? (
+            <Link href="/admin/products/new">
+              <Button>Create Product</Button>
+            </Link>
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-3">
           {params.error ? (
@@ -71,12 +67,14 @@ export default async function AdminProductsPage({
           <div className="flex gap-2 border-b border-slate-200">
             <Link href="/admin/products" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "catalog" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Product catalog</Link>
             <Link href="/admin/products?view=bulk" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Bulk update</Link>
+            <Link href="/admin/products?view=imports" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "imports" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Imports</Link>
           </div>
 
+          {view === "imports" ? <ProductImportsDropdown /> : <>
           <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_160px_150px_auto]" action="/admin/products" method="get">
             <input type="hidden" name="view" value={view} />
             <Input name="q" defaultValue={q} placeholder="Search by internal name, public name, or SKU" />
-            {view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="status" defaultValue={status}><option value="">All statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
+            {view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option><option value="__NONE__">No category selected</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="status" defaultValue={status}><option value="">All statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
             <Button type="submit" variant="secondary">
               {view === "bulk" ? "Filter" : "Search"}
             </Button>
@@ -266,6 +264,7 @@ export default async function AdminProductsPage({
               </tbody>
             </Table>
           </TableContainer>
+          </>}
         </CardContent>
       </Card>
     </div>
