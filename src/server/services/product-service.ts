@@ -491,6 +491,7 @@ export async function bulkUpdateProductControls(input: {
   isPublic?: boolean;
   isRequestable?: boolean;
   category?: string;
+  tagsToAdd?: string;
   creatorSelection?: string;
 }) {
   const uniqueProductIds = Array.from(new Set(input.productIds));
@@ -524,18 +525,35 @@ export async function bulkUpdateProductControls(input: {
     }
   }
 
-  if (Object.keys(data).length === 0) {
+  const normalizedTagsToAdd = Array.from(
+    new Map(
+      parseTags(input.tagsToAdd ?? "").map((tag) => [tag.toLocaleLowerCase(), tag]),
+    ).values(),
+  );
+
+  if (Object.keys(data).length === 0 && normalizedTagsToAdd.length === 0) {
     return 0;
   }
 
-  const result = await prisma.product.updateMany({
-    where: {
-      id: { in: uniqueProductIds },
-    },
-    data,
+  await prisma.$transaction(async (transaction) => {
+    if (Object.keys(data).length > 0) {
+      await transaction.product.updateMany({ where: { id: { in: uniqueProductIds } }, data });
+    }
+
+    if (normalizedTagsToAdd.length > 0) {
+      const products = await transaction.product.findMany({
+        where: { id: { in: uniqueProductIds } },
+        select: { id: true, tags: true },
+      });
+      await Promise.all(products.map((product) => {
+        const existingTagKeys = new Set(product.tags.map((tag) => tag.toLocaleLowerCase()));
+        const tags = [...product.tags, ...normalizedTagsToAdd.filter((tag) => !existingTagKeys.has(tag.toLocaleLowerCase()))];
+        return transaction.product.update({ where: { id: product.id }, data: { tags } });
+      }));
+    }
   });
 
-  return result.count;
+  return uniqueProductIds.length;
 }
 
 export async function addFilamentRequirement(input: {

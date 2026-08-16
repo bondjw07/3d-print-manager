@@ -166,6 +166,14 @@ export default async function AdminProductsPage({
                   <p className="mt-1 text-xs text-slate-500">Choose a managed creator to apply across selected products.</p>
                 )}
               </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="bulkTagsToAdd">
+                  Add tags
+                </label>
+                <Input id="bulkTagsToAdd" name="tagsToAdd" placeholder="Seasonal, fantasy" />
+                <p className="mt-1 text-xs text-slate-500">Comma-separated. Existing tags are kept and duplicates are skipped.</p>
+              </div>
             </div>
           </form> : null}
 

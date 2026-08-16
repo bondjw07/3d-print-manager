@@ -383,6 +383,7 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
     isRequestable: formData.get("isRequestable"),
     creatorSelection: formData.get("creatorSelection"),
     category: formData.get("category"),
+    tagsToAdd: formData.get("tagsToAdd"),
   });
 
   if (!parsed.success) {

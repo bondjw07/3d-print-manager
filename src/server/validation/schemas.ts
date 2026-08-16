@@ -131,6 +131,7 @@ export const productBulkUpdateSchema = z
     isPublic: boolLikeOrUnchanged,
     isRequestable: boolLikeOrUnchanged,
     category: z.string().trim().default("UNCHANGED"),
+    tagsToAdd: z.string().trim().max(500).optional().default(""),
     creatorSelection: z.preprocess(
       (value) => {
         if (typeof value !== "string") {
@@ -145,7 +146,7 @@ export const productBulkUpdateSchema = z
   })
   .superRefine((value, context) => {
     const hasControlChange =
-      value.status !== undefined || value.isPublic !== undefined || value.isRequestable !== undefined || value.category !== "UNCHANGED";
+      value.status !== undefined || value.isPublic !== undefined || value.isRequestable !== undefined || value.category !== "UNCHANGED" || Boolean(value.tagsToAdd);
     const hasCreatorChange = value.creatorSelection !== "UNCHANGED";
 
     if (!hasControlChange && !hasCreatorChange) {
