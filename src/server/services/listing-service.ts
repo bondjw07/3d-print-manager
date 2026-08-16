@@ -71,6 +71,7 @@ export async function getListingProductIndex({
           : { where: { isPrimary: true }, take: 1, orderBy: [{ sortOrder: "asc" }] },
         // Filter which products qualify, but always load every storefront for the one-row-per-product display.
         listings: { orderBy: [{ updatedAt: "desc" }] },
+        pricingTier: true,
         filamentRequirements: {
           include: { filament: { select: { name: true, spoolCostPerKg: true } } },
           orderBy: [{ sortOrder: "asc" }],

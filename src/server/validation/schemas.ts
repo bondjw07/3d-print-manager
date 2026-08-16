@@ -339,6 +339,11 @@ export const pricingTierUpdateSchema = z.object({
 
 export const pricingTierDeleteSchema = z.object({ id: z.string().trim().min(1) });
 
+export const shopifyCategoryTagMappingSchema = z.object({
+  category: z.string().trim().min(2),
+  categoryTag: z.string().trim(),
+});
+
 const printerUtilizationRateValues = printerUtilizationRateOptions.map((option) => option.value.toString()) as [
   string,
   ...string[],

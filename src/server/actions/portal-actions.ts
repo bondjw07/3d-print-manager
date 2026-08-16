@@ -73,6 +73,7 @@ import {
 } from "@/server/services/product-service";
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
+import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -105,6 +106,7 @@ import {
   managedCreatorDeleteSchema,
   managedCreatorSchema,
   settingsSchema,
+  shopifyCategoryTagMappingSchema,
   userAdminUpdateSchema,
 } from "@/server/validation/schemas";
 
@@ -433,6 +435,25 @@ export async function updateProductCategoriesAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/products");
   redirect(appendStatus(redirectTo, "success", "Product categories saved."));
+}
+
+export async function saveShopifyCategoryTagMappingAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=marketplace");
+  const parsed = shopifyCategoryTagMappingSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  try {
+    await ensureManagedProductCategory(parsed.data.category);
+    if (parsed.data.categoryTag && !shopifyCategoryTagOptions.some((option) => option.tag === parsed.data.categoryTag)) {
+      throw new Error("Select a valid Shopify category tag.");
+    }
+    await saveShopifyCategoryTagMapping(parsed.data.category, parsed.data.categoryTag);
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save Shopify category mapping."));
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/listings");
+  redirect(appendStatus(redirectTo, "success", "Shopify category mapping saved."));
 }
 
 export async function createPricingTierAction(formData: FormData) {

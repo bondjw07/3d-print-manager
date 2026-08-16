@@ -10,12 +10,14 @@ type Product = {
   id: string; publicName: string; sku: string; category: string; shortDescription: string; fullDescription: string; tags: string[];
   images: Array<{ id: string; imagePath: string; altText: string | null; isPrimary: boolean }>;
   suggestedCost: number | null;
+  suggestedPrice: string;
+  defaultCategoryTag: string;
 };
 type Selection = { selected: boolean; price: string; categoryTag: string; imageIds: string[]; primaryImageId: string };
 
 export function ShopifyBulkListingForm({ products, redirectTo }: { products: Product[]; redirectTo: string }) {
   const [selections, setSelections] = useState<Record<string, Selection>>(() => Object.fromEntries(products.map((product) => [product.id, {
-    selected: false, price: "", categoryTag: "", imageIds: product.images.filter((image) => image.isPrimary).map((image) => image.id), primaryImageId: product.images.find((image) => image.isPrimary)?.id ?? product.images[0]?.id ?? "",
+    selected: false, price: product.suggestedPrice, categoryTag: product.defaultCategoryTag, imageIds: product.images.filter((image) => image.isPrimary).map((image) => image.id), primaryImageId: product.images.find((image) => image.isPrimary)?.id ?? product.images[0]?.id ?? "",
   }])));
   const [preview, setPreview] = useState<Product["images"][number] | null>(null);
   const selectedCount = useMemo(() => Object.values(selections).filter((selection) => selection.selected).length, [selections]);

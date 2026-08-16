@@ -5,7 +5,7 @@ import { ConfirmSubmitModalButton } from "@/components/ui/confirm-submit-modal-b
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { marketplaceTypeOptions, humanizeEnum } from "@/lib/domain";
+import { marketplaceTypeOptions, humanizeEnum, shopifyCategoryTagOptions } from "@/lib/domain";
 import {
   baselineGramsPerHourOptions,
   complexityMultiplierOptions,
@@ -24,6 +24,7 @@ import {
   updateManagedCreatorAction,
   updateMyMiniFactoryCredentialsAction,
   saveShopifyCredentialsAction,
+  saveShopifyCategoryTagMappingAction,
   testShopifyConnectionAction,
   updatePublicAppUrlAction,
   updateProductCategoriesAction,
@@ -35,13 +36,14 @@ import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifacto
 import { getShopifyIntegrationStatus } from "@/server/services/shopify-auth-service";
 import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 import { getPricingTiers } from "@/server/services/pricing-tier-service";
+import { getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
 
 export default async function AdminSettingsPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
@@ -49,6 +51,7 @@ export default async function AdminSettingsPage({
     getShopifyIntegrationStatus(),
     getManagedCreators(),
     getPricingTiers(),
+    getShopifyCategoryTagMappings(),
   ]);
   const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
   const tabClass = (name: string) => `rounded-t-xl px-4 py-2 text-sm font-medium ${tab === name ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`;
@@ -140,6 +143,25 @@ export default async function AdminSettingsPage({
               Save Settings
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className={tab === "marketplace" ? "" : "hidden"}>
+        <CardHeader>
+          <CardTitle>Shopify Category Tag Mappings</CardTitle>
+          <CardDescription>Choose which Shopify tag should be preselected when listing products from each catalog category.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {settings.productCategories.map((category) => {
+            const currentTag = shopifyCategoryMappings.find((mapping) => mapping.category === category)?.categoryTag ?? "";
+            return <form action={saveShopifyCategoryTagMappingAction} key={category} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=marketplace" />
+              <input type="hidden" name="category" value={category} />
+              <p className="pt-2 text-sm font-medium text-slate-700">{category}</p>
+              <Select name="categoryTag" defaultValue={currentTag}><option value="">No default tag</option>{shopifyCategoryTagOptions.map((option) => <option key={option.tag} value={option.tag}>{option.label}</option>)}</Select>
+              <Button type="submit" variant="secondary">Save</Button>
+            </form>;
+          })}
         </CardContent>
       </Card>
 

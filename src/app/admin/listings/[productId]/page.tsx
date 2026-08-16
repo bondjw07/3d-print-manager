@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils";
 import { createListingAction, runListingActionAction, updateListingAction } from "@/server/actions/portal-actions";
 import { getProductByIdForAdmin } from "@/server/services/product-service";
 import { getShopifyOnlineStoreUrl, refreshShopifyListingFromRemote } from "@/server/services/shopify-auth-service";
+import { getShopifyCategoryTagForProductCategory, getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
 
 export default async function ProductListingWorkspace({
   params,
@@ -27,6 +28,7 @@ export default async function ProductListingWorkspace({
   const [{ productId }, query] = await Promise.all([params, searchParams]);
   let product = await getProductByIdForAdmin(productId);
   if (!product) notFound();
+  const shopifyCategoryMappings = await getShopifyCategoryTagMappings();
   const shopifyListingIds = product.listings.filter((listing) => listing.marketplaceType === "SHOPIFY" && listing.externalListingId).map((listing) => listing.id);
   if (shopifyListingIds.length > 0) {
     await Promise.all(shopifyListingIds.map(refreshShopifyListingFromRemote));
@@ -68,7 +70,7 @@ export default async function ProductListingWorkspace({
           <label className="grid gap-1 text-sm font-medium text-slate-700">Listing title<Input name="title" defaultValue={product.publicName} required /></label>
           <input type="hidden" name="status" value="DRAFT" />
           <ShopifyPublishingControls className="md:col-span-2 xl:col-span-3 md:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] md:items-start" />
-          <label className="grid gap-1 text-sm font-medium text-slate-700">Shopify category tag<Select name="shopifyCategoryTag" defaultValue=""><option value="">No category tag selected</option>{shopifyCategoryTagOptions.map((option) => <option key={option.tag} value={option.tag}>{option.label}</option>)}</Select></label>
+          <label className="grid gap-1 text-sm font-medium text-slate-700">Shopify category tag<Select name="shopifyCategoryTag" defaultValue={getShopifyCategoryTagForProductCategory(product.category, shopifyCategoryMappings)}><option value="">No category tag selected</option>{shopifyCategoryTagOptions.map((option) => <option key={option.tag} value={option.tag}>{option.label}</option>)}</Select></label>
           <label className="grid gap-1 text-sm font-medium text-slate-700">Price<Input name="price" type="number" min={0.01} step="0.01" defaultValue={product.pricingTier?.suggestedPrice.toString() ?? ""} placeholder="0.00" required />{product.pricingTier ? <span className="text-xs font-normal text-slate-500">Suggested by {product.pricingTier.label}; you can adjust it for this listing.</span> : null}</label>
           <input type="hidden" name="syncStatus" value="NOT_SYNCED" />
           <label className="grid gap-1 text-sm font-medium text-slate-700 md:col-span-2 xl:col-span-3">Description<Textarea name="description" defaultValue={product.fullDescription || product.shortDescription} required /></label>

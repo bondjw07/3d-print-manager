@@ -193,6 +193,14 @@ model PricingTier {
   @@index([category, sortOrder])
 }
 
+model ShopifyCategoryTagMapping {
+  id          String   @id @default(cuid())
+  category    String   @unique
+  categoryTag String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model ProductImage {
   id        String   @id @default(cuid())
   productId String

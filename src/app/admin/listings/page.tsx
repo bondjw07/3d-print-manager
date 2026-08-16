@@ -9,6 +9,7 @@ import { ShopifyBulkListingForm } from "@/components/admin/shopify-bulk-listing-
 import { Table, TableContainer } from "@/components/ui/table";
 import { humanizeEnum, listingStatusOptions, marketplaceTypeOptions } from "@/lib/domain";
 import { getListingProductIndex } from "@/server/services/listing-service";
+import { getShopifyCategoryTagForProductCategory, getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
 import { calculateRequestEstimate } from "@/lib/request-estimates";
 import { ListingStatus, MarketplaceType } from "@/generated/prisma/client";
 
@@ -34,10 +35,15 @@ export default async function AdminListingsPage({
   const requestedPage = Number(params.page);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const q = params.q?.trim() ?? "";
-  const result = await getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status });
+  const [result, shopifyCategoryMappings] = await Promise.all([
+    getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status }),
+    getShopifyCategoryTagMappings(),
+  ]);
   const bulkProducts = result.products.map((product) => ({
     ...product,
     suggestedCost: calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost,
+    suggestedPrice: product.pricingTier?.suggestedPrice.toString() ?? "",
+    defaultCategoryTag: getShopifyCategoryTagForProductCategory(product.category, shopifyCategoryMappings),
   }));
 
   const makeHref = (overrides: Record<string, string | number | undefined>) => {
