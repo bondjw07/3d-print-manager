@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,8 @@ import { StatusBadge } from "@/components/ui/badge";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
 import { ProductImportsDropdown } from "@/components/forms/product-imports-dropdown";
-import { formatDateTime } from "@/lib/utils";
+import { HoverInfo } from "@/components/ui/hover-info";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { humanizeEnum, productStatusOptions } from "@/lib/domain";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getAdminProducts } from "@/server/services/product-service";
@@ -226,7 +228,7 @@ export default async function AdminProductsPage({
                     <td className="px-0 py-0">
                       <Link className="block px-2 py-3" href={`/admin/products/${product.id}`}>
                         <p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span>{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span>{product.pricingTier ? <HoverInfo content={<><p className="font-semibold text-slate-900">{product.pricingTier.label}</p><p className="mt-0.5 text-slate-600">Suggested listing price: {formatCurrency(Number(product.pricingTier.suggestedPrice))}</p><p className="mt-0.5 text-slate-500">{product.pricingTier.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700" aria-label={`Pricing tier: ${product.pricingTier.label}`}><Tag className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
                       </Link>
                     </td>
                     <td className="px-0 py-0">
