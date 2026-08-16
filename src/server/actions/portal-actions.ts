@@ -408,6 +408,7 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
   try {
     updatedProducts = await bulkUpdateProductControls({
       ...parsed.data,
+      category: parsed.data.category === "UNCHANGED" ? undefined : parsed.data.category,
       pricingTierId: parsed.data.pricingTierId === "UNCHANGED" ? undefined : parsed.data.pricingTierId,
     });
   } catch (error) {
