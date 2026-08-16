@@ -37,6 +37,7 @@ import { getShopifyIntegrationStatus } from "@/server/services/shopify-auth-serv
 import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 import { getPricingTiers } from "@/server/services/pricing-tier-service";
 import { getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
+import { getBuildVersion } from "@/lib/build-info";
 
 export default async function AdminSettingsPage({
   searchParams,
@@ -55,6 +56,7 @@ export default async function AdminSettingsPage({
   ]);
   const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
   const tabClass = (name: string) => `rounded-t-xl px-4 py-2 text-sm font-medium ${tab === name ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`;
+  const buildVersion = getBuildVersion();
 
   return (
     <div className="space-y-4">
@@ -211,6 +213,16 @@ export default async function AdminSettingsPage({
               </form>
             </div>)}
           </div>}
+        </CardContent>
+      </Card>
+
+      <Card className={tab === "operations" ? "" : "hidden"}>
+        <CardHeader>
+          <CardTitle>Deployed Commit</CardTitle>
+          <CardDescription>This is the Git commit built into the running container. Match it to the commit you released to confirm that deployment is live.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800">{buildVersion}</p>
         </CardContent>
       </Card>
 

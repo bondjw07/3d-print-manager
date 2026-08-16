@@ -369,6 +369,7 @@ model MarketplaceEvent {
 model AppSetting {
   id                 String          @id @default("app")
   defaultMarketplace MarketplaceType @default(ETSY)
+  appVersion         String          @default("0.1.0")
   printerCount                    Int      @default(3)
   printerUtilizationRate          Decimal  @default(0.6) @db.Decimal(4, 2)
   baselineGramsPerHour            Decimal  @default(31.6) @db.Decimal(6, 2)

@@ -1,0 +1,1 @@
+ALTER TABLE "AppSetting" ADD COLUMN "appVersion" TEXT NOT NULL DEFAULT '0.1.0';

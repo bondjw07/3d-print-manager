@@ -21,6 +21,9 @@ FROM base AS builder
 
 WORKDIR /app
 
+ARG APP_GIT_SHA=unknown
+ENV APP_GIT_SHA=$APP_GIT_SHA
+
 ENV NEXT_TELEMETRY_DISABLED=1
 # Prisma config requires DATABASE_URL even for client generation.
 ENV DATABASE_URL=postgresql://printportal:printportal@localhost:5432/printportal?schema=public
@@ -39,6 +42,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+ARG APP_GIT_SHA=unknown
+ENV APP_GIT_SHA=$APP_GIT_SHA
 
 COPY --from=builder /app ./
 

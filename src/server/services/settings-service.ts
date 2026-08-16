@@ -23,6 +23,14 @@ export async function updateDefaultMarketplace(defaultMarketplace: MarketplaceTy
   });
 }
 
+export async function updateAppVersion(appVersion: string) {
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: { id: "app", defaultMarketplace: "ETSY", appVersion },
+    update: { appVersion },
+  });
+}
+
 export async function updatePublicAppUrl(publicAppUrl: string) {
   return prisma.appSetting.upsert({
     where: { id: "app" },

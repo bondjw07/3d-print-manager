@@ -48,6 +48,7 @@ import {
   updateProductCategories,
   updatePublicAppUrl,
   updateProcessingEstimateSettings,
+  updateAppVersion,
   getSettings,
 } from "@/server/services/settings-service";
 import { updateUserByAdmin } from "@/server/services/user-service";
@@ -106,6 +107,7 @@ import {
   managedCreatorDeleteSchema,
   managedCreatorSchema,
   settingsSchema,
+  appVersionSchema,
   shopifyCategoryTagMappingSchema,
   userAdminUpdateSchema,
 } from "@/server/validation/schemas";
@@ -1307,6 +1309,16 @@ export async function updateSettingsAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/catalog");
   redirect(appendStatus(redirectTo, "success", "Default marketplace updated."));
+}
+
+export async function updateAppVersionAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const parsed = appVersionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await updateAppVersion(parsed.data.appVersion);
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "Application version updated."));
 }
 
 export async function updatePublicAppUrlAction(formData: FormData) {

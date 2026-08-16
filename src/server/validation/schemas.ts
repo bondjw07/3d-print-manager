@@ -321,6 +321,10 @@ export const settingsSchema = z.object({
   defaultMarketplace: z.nativeEnum(MarketplaceType),
 });
 
+export const appVersionSchema = z.object({
+  appVersion: z.string().trim().min(1).max(40).regex(/^v?\d+(?:\.\d+){0,2}(?:[-+][a-zA-Z0-9.-]+)?$/, "Use a version such as 1.2.3."),
+});
+
 export const productCategoriesSchema = z.object({
   categories: z.string().max(5000),
 });
