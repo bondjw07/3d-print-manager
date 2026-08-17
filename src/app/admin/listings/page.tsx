@@ -13,6 +13,7 @@ import { getShopifyCategoryTagForProductCategory, getShopifyCategoryTagMappings 
 import { calculateRequestEstimate } from "@/lib/request-estimates";
 import { ListingStatus, MarketplaceType, ProductStatus } from "@/generated/prisma/client";
 import { getSettings } from "@/server/services/settings-service";
+import { getPricingTiers } from "@/server/services/pricing-tier-service";
 
 const PAGE_SIZE = 24;
 
@@ -25,7 +26,7 @@ const marketplaceMarks: Record<MarketplaceType, { label: string; className: stri
 export default async function AdminListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; marketplace?: string; status?: string; category?: string; productStatus?: string; visibility?: string; page?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; marketplace?: string; status?: string; category?: string; pricingTierId?: string; productStatus?: string; visibility?: string; page?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "unlisted" || params.view === "bulk" ? params.view : "listed";
@@ -34,15 +35,17 @@ export default async function AdminListingsPage({
     : undefined;
   const status = listingStatusOptions.includes(params.status as ListingStatus) ? (params.status as ListingStatus) : undefined;
   const category = params.category === "__NONE__" ? "__NONE__" : params.category?.trim() ?? "";
+  const pricingTierId = params.pricingTierId === "__NONE__" ? "__NONE__" : params.pricingTierId?.trim() ?? "";
   const productStatus = productStatusOptions.includes(params.productStatus as (typeof productStatusOptions)[number]) ? params.productStatus as ProductStatus : undefined;
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
   const requestedPage = Number(params.page);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const q = params.q?.trim() ?? "";
-  const [result, shopifyCategoryMappings, settings] = await Promise.all([
-    getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status, ...(view === "bulk" ? { category: category || undefined, productStatus, visibility: visibility || undefined } : {}) }),
+  const [result, shopifyCategoryMappings, settings, pricingTiers] = await Promise.all([
+    getListingProductIndex({ page, pageSize: PAGE_SIZE, view: view === "bulk" ? "unlisted" : view, search: q, marketplace, status, ...(view === "bulk" ? { category: category || undefined, pricingTierId: pricingTierId || undefined, productStatus, visibility: visibility || undefined } : {}) }),
     getShopifyCategoryTagMappings(),
     getSettings(),
+    getPricingTiers(),
   ]);
   const bulkProducts = result.products.map((product) => ({
     id: product.id,
@@ -65,7 +68,7 @@ export default async function AdminListingsPage({
 
   const makeHref = (overrides: Record<string, string | number | undefined>) => {
     const query = new URLSearchParams();
-    const values = { view, q, marketplace, status, category: view === "bulk" ? category : undefined, productStatus: view === "bulk" ? productStatus : undefined, visibility: view === "bulk" ? visibility : undefined, page: result.page, ...overrides };
+    const values = { view, q, marketplace, status, category: view === "bulk" ? category : undefined, pricingTierId: view === "bulk" ? pricingTierId : undefined, productStatus: view === "bulk" ? productStatus : undefined, visibility: view === "bulk" ? visibility : undefined, page: result.page, ...overrides };
     Object.entries(values).forEach(([key, value]) => {
       if (value !== undefined && value !== "" && !(key === "page" && value === 1)) query.set(key, String(value));
     });
@@ -101,7 +104,7 @@ export default async function AdminListingsPage({
           <CardTitle>{view === "listed" ? "Existing listings" : view === "bulk" ? "Create Shopify listings in bulk" : "Products not listed anywhere"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form action="/admin/listings" method="get" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_150px_auto]">
+          <form action="/admin/listings" method="get" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_200px_180px_150px_auto]">
             <input type="hidden" name="view" value={view} />
             <Input name="q" defaultValue={q} placeholder="Search product, SKU, category, or tag" />
             {view === "listed" ? (
@@ -115,7 +118,7 @@ export default async function AdminListingsPage({
                   {listingStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}
                 </Select>
               </>
-            ) : view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option><option value="__NONE__">No category selected</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="productStatus" defaultValue={productStatus ?? ""}><option value="">All product statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
+            ) : view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option><option value="__NONE__">No category selected</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="pricingTierId" defaultValue={pricingTierId}><option value="">All pricing tiers</option><option value="__NONE__">No pricing tier</option>{pricingTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.category} · {tier.label} (${tier.suggestedPrice.toString()})</option>)}</Select><Select name="productStatus" defaultValue={productStatus ?? ""}><option value="">All product statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
             <button type="submit" className="h-10 rounded-xl bg-sky-500 px-4 text-sm font-medium text-slate-950 hover:bg-sky-400">Filter</button>
           </form>
 
