@@ -22,6 +22,9 @@ export type ListingIndexFilters = {
   search?: string;
   marketplace?: MarketplaceType;
   status?: ListingStatus;
+  category?: string;
+  productStatus?: ProductStatus;
+  visibility?: "public" | "private";
 };
 
 export async function getListingProductIndex({
@@ -31,6 +34,9 @@ export async function getListingProductIndex({
   search,
   marketplace,
   status,
+  category,
+  productStatus,
+  visibility,
 }: ListingIndexFilters) {
   const normalizedSearch = search?.trim();
   const tagMatchedProductIds = normalizedSearch
@@ -50,6 +56,9 @@ export async function getListingProductIndex({
   };
   const where = {
     ...(view === "unlisted" ? { listings: { none: {} } } : { listings: { some: listingWhere } }),
+    ...(category ? (category === "__NONE__" ? { category: "" } : { category }) : {}),
+    ...(productStatus ? { status: productStatus } : {}),
+    ...(visibility ? { isPublic: visibility === "public" } : {}),
     ...(normalizedSearch
       ? {
           OR: [
