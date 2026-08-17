@@ -173,6 +173,23 @@ export const managedCreatorDeleteSchema = z.object({
   creatorId: z.string().trim().min(1),
 });
 
+export const sourceMigrationScanSchema = z.object({
+  sourceCreator: z.string().trim().min(2).max(160),
+  sourceCreatorUrl: z.url().optional().or(z.literal("")),
+  targetCreatorUrl: z.url(),
+});
+
+export const sourceMigrationApplySchema = z.object({
+  migrationId: z.string().trim().min(1),
+  rowIds: z.array(z.string().trim().min(1)).min(1, "Select at least one mapped product."),
+});
+
+export const sourceMigrationManualMatchSchema = z.object({
+  migrationId: z.string().trim().min(1),
+  rowId: z.string().trim().min(1),
+  targetSourceUrl: z.url(),
+});
+
 export const filamentFormSchema = z.object({
   name: z.string().trim().min(2),
   brand: z.string().trim().optional(),

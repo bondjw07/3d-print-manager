@@ -75,6 +75,7 @@ import {
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
+import { applySourceMigrationRows, scanThangsCreatorMigration, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -110,6 +111,9 @@ import {
   appVersionSchema,
   shopifyCategoryTagMappingSchema,
   userAdminUpdateSchema,
+  sourceMigrationApplySchema,
+  sourceMigrationScanSchema,
+  sourceMigrationManualMatchSchema,
 } from "@/server/validation/schemas";
 
 function firstIssueMessage(error: { issues?: { message: string }[] }) {
@@ -1418,6 +1422,60 @@ export async function deleteManagedCreatorAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/products");
   redirect(appendStatus(redirectTo, "success", "Creator deleted."));
+}
+
+export async function scanThangsCreatorMigrationAction(formData: FormData) {
+  const user = await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const parsed = sourceMigrationScanSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+
+  try {
+    const migration = await scanThangsCreatorMigration({ ...parsed.data, createdByUserId: user.id });
+    revalidatePath("/admin/settings");
+    redirect(appendStatus(redirectTo, "success", `Scan complete: ${migration.id}. Review the mapped rows below.`));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Migration scan failed."));
+  }
+}
+
+export async function applySourceMigrationRowsAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const parsed = sourceMigrationApplySchema.safeParse({
+    migrationId: formData.get("migrationId"),
+    rowIds: formData.getAll("rowIds"),
+  });
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+
+  try {
+    const result = await applySourceMigrationRows(parsed.data);
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/products");
+    redirect(appendStatus(redirectTo, "success", `Applied ${result.applied} mapping${result.applied === 1 ? "" : "s"}${result.conflicts ? `; ${result.conflicts} conflict${result.conflicts === 1 ? "" : "s"} need review.` : "."}`));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to apply migration."));
+  }
+}
+
+export async function setSourceMigrationRowTargetAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const rowId = String(formData.get("rowId") ?? "").trim();
+  const parsed = sourceMigrationManualMatchSchema.safeParse({
+    migrationId: formData.get("migrationId"),
+    rowId,
+    targetSourceUrl: formData.get(`targetSourceUrl-${rowId}`),
+  });
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+
+  try {
+    await setSourceMigrationRowTarget(parsed.data);
+    revalidatePath("/admin/settings");
+    redirect(appendStatus(redirectTo, "success", "Manual target saved. Review it, then select it for application."));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save target listing."));
+  }
 }
 
 export async function deleteAllProductsAction(formData: FormData) {

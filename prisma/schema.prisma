@@ -80,6 +80,13 @@ enum ProductImportSource {
   LOOT_STUDIOS
 }
 
+enum SourceMigrationStatus {
+  PENDING
+  APPLIED
+  SKIPPED
+  CONFLICT
+}
+
 enum QueueSourceType {
   REQUEST
   MARKETPLACE
@@ -169,6 +176,7 @@ model Product {
   queueItems           QueueItem[]
   inventoryRecord      InventoryRecord?
   marketplaceEvents    MarketplaceEvent[]
+  sourceMigrationRows  SourceMigrationRow[]
   pricingTier          PricingTier? @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
 
   @@index([status, isPublic])
@@ -176,6 +184,47 @@ model Product {
   @@index([pricingTierId])
   @@unique([importSource, importSourceReferenceId])
   @@unique([importSource, importSourceNormalizedUrl])
+}
+
+model SourceMigration {
+  id               String   @id @default(cuid())
+  sourceCreator    String
+  sourceCreatorUrl String?
+  targetCreator    String
+  targetCreatorUrl String
+  scannedAt        DateTime @default(now())
+  createdByUserId  String?
+  rows             SourceMigrationRow[]
+
+  @@index([scannedAt])
+}
+
+model SourceMigrationRow {
+  id                    String                @id @default(cuid())
+  migrationId           String
+  productId             String
+  productTitle          String
+  oldReferenceId        String?
+  oldSourceUrl          String?
+  oldNormalizedUrl      String?
+  targetTitle           String?
+  targetReferenceId     String?
+  targetSourceUrl       String?
+  targetNormalizedUrl   String?
+  matchMethod           String?
+  confidence            Int?
+  status                SourceMigrationStatus @default(PENDING)
+  appliedAt             DateTime?
+  error                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  migration SourceMigration @relation(fields: [migrationId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([migrationId, productId])
+  @@index([migrationId, status])
+  @@index([targetReferenceId])
 }
 
 model PricingTier {
