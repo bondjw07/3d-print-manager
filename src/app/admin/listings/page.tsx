@@ -85,15 +85,15 @@ export default async function AdminListingsPage({
       {params.success ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
 
       <div className="flex flex-wrap gap-2 border-b border-slate-200">
-        <Link href={makeHref({ view: "listed", page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "listed" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+        <a href={makeHref({ view: "listed", page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "listed" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
           Listed products
-        </Link>
-        <Link href={makeHref({ view: "unlisted", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "unlisted" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+        </a>
+        <a href={makeHref({ view: "unlisted", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "unlisted" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
           Unlisted products
-        </Link>
-        <Link href={makeHref({ view: "bulk", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
+        </a>
+        <a href={makeHref({ view: "bulk", marketplace: undefined, status: undefined, page: 1 })} className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>
           Bulk list
-        </Link>
+        </a>
       </div>
 
       <Card>
@@ -155,7 +155,7 @@ export default async function AdminListingsPage({
             </Table>
           </TableContainer>}
 
-          {result.totalPages > 1 ? <nav className="flex items-center justify-between" aria-label="Listing pages"><p className="text-sm text-slate-500">Page {result.page} of {result.totalPages}</p><div className="flex gap-2">{result.page > 1 ? <Link href={makeHref({ page: result.page - 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Previous</Link> : null}{result.page < result.totalPages ? <Link href={makeHref({ page: result.page + 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Next</Link> : null}</div></nav> : null}
+          {result.totalPages > 1 ? <nav className="flex items-center justify-between" aria-label="Listing pages"><p className="text-sm text-slate-500">Page {result.page} of {result.totalPages}</p><div className="flex gap-2">{result.page > 1 ? view === "bulk" ? <a href={makeHref({ page: result.page - 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Previous</a> : <Link href={makeHref({ page: result.page - 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Previous</Link> : null}{result.page < result.totalPages ? view === "bulk" ? <a href={makeHref({ page: result.page + 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Next</a> : <Link href={makeHref({ page: result.page + 1 })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">Next</Link> : null}</div></nav> : null}
         </CardContent>
       </Card>
     </div>

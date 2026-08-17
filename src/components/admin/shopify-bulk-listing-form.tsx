@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { bulkCreateShopifyListingsAction } from "@/server/actions/portal-actions";
+import { bulkCreateShopifyListingsAction, type BulkShopifyListingActionState } from "@/server/actions/portal-actions";
 import { shopifyCategoryTagOptions } from "@/lib/domain";
 import { ShopifyPublishingControls } from "./shopify-publishing-controls";
 
@@ -15,6 +15,7 @@ type Product = {
   defaultCategoryTag: string;
 };
 type Selection = { selected: boolean; price: string; categoryTag: string; imageIds: string[]; primaryImageId: string };
+const initialActionState: BulkShopifyListingActionState = { status: "idle" };
 
 function BulkListingSubmitControls({ selectedCount, isPosting, elapsedSeconds }: { selectedCount: number; isPosting: boolean; elapsedSeconds: number }) {
   const { pending } = useFormStatus();
@@ -37,6 +38,7 @@ function BulkListingSubmitControls({ selectedCount, isPosting, elapsedSeconds }:
 }
 
 export function ShopifyBulkListingForm({ products, redirectTo }: { products: Product[]; redirectTo: string }) {
+  const [actionState, formAction] = useActionState(bulkCreateShopifyListingsAction, initialActionState);
   const [selections, setSelections] = useState<Record<string, Selection>>(() => Object.fromEntries(products.map((product) => [product.id, {
     selected: false, price: product.suggestedPrice, categoryTag: product.defaultCategoryTag, imageIds: product.images.filter((image) => image.isPrimary).map((image) => image.id), primaryImageId: product.images.find((image) => image.isPrimary)?.id ?? product.images[0]?.id ?? "",
   }])));
@@ -51,18 +53,28 @@ export function ShopifyBulkListingForm({ products, redirectTo }: { products: Pro
     const interval = window.setInterval(() => setElapsedSeconds((current) => current + 1), 1000);
     return () => window.clearInterval(interval);
   }, [isPosting]);
+  useEffect(() => {
+    if (actionState.status === "error") {
+      setIsPosting(false);
+      return;
+    }
+    if (actionState.status === "success" && actionState.redirectTo) {
+      window.location.assign(actionState.redirectTo);
+    }
+  }, [actionState]);
   const toggleImage = (productId: string, imageId: string, checked: boolean) => {
     const current = selections[productId];
     const imageIds = checked ? [...new Set([...current.imageIds, imageId])] : current.imageIds.filter((id) => id !== imageId);
     update(productId, { imageIds, primaryImageId: checked ? current.primaryImageId || imageId : current.primaryImageId === imageId ? imageIds[0] ?? "" : current.primaryImageId });
   };
 
-  return <form action={bulkCreateShopifyListingsAction} onSubmit={() => { setElapsedSeconds(0); setIsPosting(true); }} className="space-y-4">
+  return <form action={formAction} onSubmit={() => { setElapsedSeconds(0); setIsPosting(true); }} className="space-y-4">
     <input type="hidden" name="redirectTo" value={redirectTo} />
     <input type="hidden" name="items" value={JSON.stringify(items)} />
     <div className="sticky bottom-3 z-20 rounded-2xl border border-sky-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-sky-900 dark:bg-slate-900/95">
       <fieldset disabled={isPosting} className="contents"><ShopifyPublishingControls className="sm:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] sm:items-start" /></fieldset>
       <BulkListingSubmitControls selectedCount={selectedCount} isPosting={isPosting} elapsedSeconds={elapsedSeconds} />
+      {actionState.status === "error" && actionState.message ? <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{actionState.message}</p> : null}
     </div>
 
     <fieldset disabled={isPosting} className="space-y-3 disabled:opacity-60">{products.map((product) => {

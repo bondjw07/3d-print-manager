@@ -824,41 +824,47 @@ export async function createListingAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", parsed.data.marketplaceType === "SHOPIFY" ? "Listing saved and Shopify product created." : "Listing saved."));
 }
 
-export async function bulkCreateShopifyListingsAction(formData: FormData) {
+export type BulkShopifyListingActionState = {
+  status: "idle" | "error" | "success";
+  message?: string;
+  redirectTo?: string;
+};
+
+export async function bulkCreateShopifyListingsAction(_previousState: BulkShopifyListingActionState, formData: FormData): Promise<BulkShopifyListingActionState> {
   await requireRole("ADMIN");
   const redirectTo = String(formData.get("redirectTo") ?? "/admin/listings?view=bulk");
   const shopifyProductStatus = String(formData.get("shopifyProductStatus") ?? "DRAFT");
   const publicationIds = formData.getAll("shopifyPublicationIds").map(String);
   if (!["ACTIVE", "DRAFT", "UNLISTED"].includes(shopifyProductStatus)) {
-    redirect(appendStatus(redirectTo, "error", "Select a valid Shopify product status."));
+    return { status: "error", message: "Select a valid Shopify product status." };
   }
   if (shopifyProductStatus === "DRAFT" && publicationIds.length > 0) {
-    redirect(appendStatus(redirectTo, "error", "A Shopify product must be Active or Unlisted before it can be published to a sales channel."));
+    return { status: "error", message: "A Shopify product must be Active or Unlisted before it can be published to a sales channel." };
   }
 
   let rawItems: unknown;
   try { rawItems = JSON.parse(String(formData.get("items") ?? "[]")); }
-  catch { redirect(appendStatus(redirectTo, "error", "The bulk listing selection could not be read. Please try again.")); }
+  catch { return { status: "error", message: "The bulk listing selection could not be read. Please try again." }; }
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    redirect(appendStatus(redirectTo, "error", "Select at least one product and enter a price."));
+    return { status: "error", message: "Select at least one product and enter a price." };
   }
   const items = [] as Array<ReturnType<typeof bulkShopifyListingSchema.parse>>;
   for (const rawItem of rawItems) {
     const parsedItem = bulkShopifyListingSchema.safeParse(rawItem);
-    if (!parsedItem.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsedItem.error)));
+    if (!parsedItem.success) return { status: "error", message: firstIssueMessage(parsedItem.error) };
     items.push(parsedItem.data);
   }
   const productIds = [...new Set(items.map((item) => item.productId))];
-  if (productIds.length !== items.length) redirect(appendStatus(redirectTo, "error", "A product can only be included once in a bulk listing."));
+  if (productIds.length !== items.length) return { status: "error", message: "A product can only be included once in a bulk listing." };
 
   const [products, appSetting] = await Promise.all([
     prisma.product.findMany({ where: { id: { in: productIds }, listings: { none: { marketplaceType: "SHOPIFY" } } }, include: { images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] } } }),
     prisma.appSetting.findUnique({ where: { id: "app" }, select: { publicAppUrl: true } }),
   ]);
-  if (products.length !== productIds.length) redirect(appendStatus(redirectTo, "error", "One or more products already has a Shopify listing. Refresh this page and try again."));
+  if (products.length !== productIds.length) return { status: "error", message: "One or more products already has a Shopify listing. Refresh this page and try again." };
   const appUrl = appSetting?.publicAppUrl;
   if (items.some((item) => item.imageIds.length > 0) && (!appUrl || /^https?:\/\/(localhost|127\.0\.0\.1)/.test(appUrl))) {
-    redirect(appendStatus(redirectTo, "error", "Set the public app URL in Settings before sending product images to Shopify."));
+    return { status: "error", message: "Set the public app URL in Settings before sending product images to Shopify." };
   }
 
   let created = 0;
@@ -884,12 +890,13 @@ export async function bulkCreateShopifyListingsAction(formData: FormData) {
     }
   } catch (error) {
     const suffix = created > 0 ? ` ${created} listing${created === 1 ? " was" : "s were"} created before the failure.` : "";
-    redirect(appendStatus(redirectTo, "error", `${error instanceof Error ? error.message : "Unable to create bulk listings."}${suffix}`));
+    return { status: "error", message: `${error instanceof Error ? error.message : "Unable to create bulk listings."}${suffix}` };
   }
   revalidatePath("/admin/listings");
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
-  redirect(appendStatus(redirectTo, "success", `${created} Shopify listing${created === 1 ? "" : "s"} created.`));
+  const message = `${created} Shopify listing${created === 1 ? "" : "s"} created.`;
+  return { status: "success", message, redirectTo: appendStatus(redirectTo, "success", message) };
 }
 
 export async function updateListingAction(formData: FormData) {
