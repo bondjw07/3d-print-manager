@@ -1,4 +1,6 @@
 import type { ProductImportFetchMode } from "./types";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 type FetchedPage = {
   body: string;
@@ -27,6 +29,7 @@ const MIRROR_BACKOFF_BASE_MS = 1_500;
 const MIRROR_BACKOFF_MAX_MS = 20_000;
 
 let mirrorNextAllowedAt = 0;
+const execFileAsync = promisify(execFile);
 
 function wait(ms: number) {
   if (ms <= 0) {
@@ -143,12 +146,12 @@ async function fetchDirect(url: string): Promise<FetchedPage | null> {
   });
 
   if (!response.ok) {
-    return null;
+    throw new Error(`Direct fetch failed (${response.status}).`);
   }
 
   const body = await response.text();
   if (looksLikeBotChallenge(body)) {
-    return null;
+    throw new Error("Direct fetch was blocked by a bot challenge.");
   }
 
   return {
@@ -160,6 +163,35 @@ async function fetchDirect(url: string): Promise<FetchedPage | null> {
 function buildMirrorUrl(sourceUrl: string) {
   const parsed = new URL(sourceUrl);
   return `https://r.jina.ai/http://${parsed.host}${parsed.pathname}${parsed.search}`;
+}
+
+async function fetchMirrorWithCurl(sourceUrl: string): Promise<{ body: string | null; diagnostic?: string }> {
+  try {
+    // Jina can issue a Cloudflare challenge to Node's TLS fingerprint even when
+    // the same request works through curl. This is deliberately a last-resort
+    // fallback for mirror 403s; normal requests remain on fetch.
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "--fail",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "20",
+        "--user-agent",
+        browserLikeHeaders["user-agent"],
+        "--header",
+        "Accept: text/plain, text/markdown;q=0.9, */*;q=0.8",
+        buildMirrorUrl(sourceUrl),
+      ],
+      { maxBuffer: 5 * 1024 * 1024 },
+    );
+    return { body: stdout.trim() || null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "Unknown curl error.";
+    return { body: null, diagnostic: `curl fallback failed: ${message.slice(0, 240)}` };
+  }
 }
 
 async function fetchMirror(sourceUrl: string): Promise<FetchedPage> {
@@ -207,7 +239,19 @@ async function fetchMirror(sourceUrl: string): Promise<FetchedPage> {
     }
 
     if (!response.ok) {
-      lastError = new Error(`Mirror fetch failed (${response.status}).`);
+      if (response.status === 403) {
+        const curlResult = await fetchMirrorWithCurl(sourceUrl);
+        if (curlResult.body) {
+          reserveMirrorCooldown(MIRROR_MIN_INTERVAL_MS);
+          return {
+            body: curlResult.body,
+            fetchMode: "MIRROR_MARKDOWN",
+          };
+        }
+        lastError = new Error(`Mirror fetch failed (403). ${curlResult.diagnostic ?? "curl fallback returned no content."}`);
+      } else {
+        lastError = new Error(`Mirror fetch failed (${response.status}).`);
+      }
       const retryMs = defaultBackoffForAttempt(attempt);
       reserveMirrorCooldown(retryMs);
 
@@ -247,14 +291,21 @@ export async function fetchMirrorPage(sourceUrl: string): Promise<FetchedPage> {
 }
 
 export async function fetchPageWithFallback(sourceUrl: string): Promise<FetchedPage> {
+  let directDiagnostic = "Direct fetch was unavailable.";
   try {
     const direct = await fetchDirect(sourceUrl);
     if (direct) {
       return direct;
     }
-  } catch {
+  } catch (error) {
+    directDiagnostic = error instanceof Error ? error.message : "Direct fetch failed unexpectedly.";
     // fall through to mirror fallback
   }
 
-  return fetchMirror(sourceUrl);
+  try {
+    return await fetchMirror(sourceUrl);
+  } catch (error) {
+    const mirrorDiagnostic = error instanceof Error ? error.message : "Mirror fetch failed unexpectedly.";
+    throw new Error(`Unable to fetch ${sourceUrl}. ${directDiagnostic} ${mirrorDiagnostic}`);
+  }
 }
