@@ -76,6 +76,7 @@ import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/serve
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
 import { applySourceMigrationRows, buildThangsCreatorMigrationFromCsv, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
+import { importEnrichedThangsProductsFromCsv, importMissingThangsProductsFromCsv } from "@/server/services/thangs-csv-import-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -114,6 +115,8 @@ import {
   sourceMigrationApplySchema,
   sourceMigrationScanSchema,
   sourceMigrationManualMatchSchema,
+  thangsCatalogCsvImportSchema,
+  thangsEnrichedCsvImportSchema,
 } from "@/server/validation/schemas";
 
 function firstIssueMessage(error: { issues?: { message: string }[] }) {
@@ -1447,6 +1450,41 @@ export async function scanThangsCreatorMigrationAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "success", `Review built from ${result.sourceCatalogCount} Loot Lab and ${result.targetCatalogCount} Kit Kiln listings. Review the proposed mappings below.`));
   } catch (error) {
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Migration scan failed."));
+  }
+}
+
+export async function importThangsCatalogCsvAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const parsed = thangsCatalogCsvImportSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  const csv = formData.get("catalogCsv");
+  if (!(csv instanceof File) || csv.size === 0) redirect(appendStatus(redirectTo, "error", "Upload a Kit Kiln catalog CSV."));
+
+  try {
+    const result = await importMissingThangsProductsFromCsv({ csv: await csv.text(), creatorUrl: parsed.data.creatorUrl });
+    revalidatePath("/admin");
+    revalidatePath("/admin/products");
+    revalidatePath("/catalog");
+    redirect(appendStatus(redirectTo, "success", `Catalog import complete: ${result.created} draft product${result.created === 1 ? "" : "s"} created; ${result.skipped} existing product${result.skipped === 1 ? "" : "s"} skipped.`));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Catalog CSV import failed."));
+  }
+}
+
+export async function importEnrichedThangsCsvAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=operations");
+  const parsed = thangsEnrichedCsvImportSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  const csv = formData.get("enrichedCsv");
+  if (!(csv instanceof File) || csv.size === 0) redirect(appendStatus(redirectTo, "error", "Upload an enriched Thangs CSV."));
+  try {
+    const result = await importEnrichedThangsProductsFromCsv({ csv: await csv.text(), creatorUrl: parsed.data.creatorUrl });
+    revalidatePath("/admin/products"); revalidatePath("/catalog");
+    redirect(appendStatus(redirectTo, "success", `Enriched import complete: ${result.created} drafts created; ${result.skipped} existing products skipped.`));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Enriched CSV import failed."));
   }
 }
 

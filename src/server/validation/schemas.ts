@@ -190,6 +190,12 @@ export const sourceMigrationManualMatchSchema = z.object({
   targetId: z.string().trim().min(1, "Choose a Kit Kiln listing."),
 });
 
+export const thangsCatalogCsvImportSchema = z.object({
+  creatorUrl: z.url(),
+});
+
+export const thangsEnrichedCsvImportSchema = z.object({ creatorUrl: z.url() });
+
 export const filamentFormSchema = z.object({
   name: z.string().trim().min(2),
   brand: z.string().trim().optional(),

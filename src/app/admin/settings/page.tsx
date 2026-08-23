@@ -28,6 +28,8 @@ import {
   saveShopifyCategoryTagMappingAction,
   testShopifyConnectionAction,
   scanThangsCreatorMigrationAction,
+  importThangsCatalogCsvAction,
+  importEnrichedThangsCsvAction,
   setSourceMigrationRowTargetAction,
   updatePublicAppUrlAction,
   updateProductCategoriesAction,
@@ -532,6 +534,29 @@ export default async function AdminSettingsPage({
               <p className="mt-2 text-xs text-slate-600">Every imported Loot Lab product receives a fuzzy Kit Kiln proposal. Green is high confidence, yellow needs review, and red should be manually matched before applying.</p>
             </div>
           </form>
+
+          <form action={importThangsCatalogCsvAction} className="grid gap-3 rounded-xl border border-border bg-surface-muted p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Kit Kiln catalog CSV
+              <Input name="catalogCsv" type="file" accept=".csv,text/csv" required />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Creator URL
+              <Input name="creatorUrl" type="url" defaultValue="https://thangs.com/designer/The%20Kit%20Kiln" required />
+            </label>
+            <div className="flex items-end"><Button type="submit">Import missing drafts</Button></div>
+            <p className="lg:col-span-3 text-xs text-slate-600">Creates only missing Thangs IDs as non-public, non-listable drafts. It uses CSV title, ID, and URL only; images, descriptions, and print details remain for review.</p>
+          </form>
+
+          <div className="rounded-xl border border-border bg-surface-muted p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Chrome-enriched import</p>
+            <p className="mt-1 text-xs text-slate-600">First download a queue of only missing models, run the Chrome Snippet against that queue, then upload its enriched CSV here.</p>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <form action="/api/admin/thangs-enrichment-queue" method="post" encType="multipart/form-data" className="flex items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-medium">Kit Kiln catalog CSV<Input name="catalogCsv" type="file" accept=".csv,text/csv" required /></label><Button type="submit" variant="secondary">Download queue</Button></form>
+              <form action={importEnrichedThangsCsvAction} className="flex items-end gap-2"><input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" /><input type="hidden" name="creatorUrl" value="https://thangs.com/designer/The%20Kit%20Kiln" /><label className="grid flex-1 gap-1 text-xs font-medium">Chrome-enriched CSV<Input name="enrichedCsv" type="file" accept=".csv,text/csv" required /></label><Button type="submit">Import enriched drafts</Button></form>
+            </div>
+          </div>
 
           {latestSourceMigration ? (() => {
             const rows = latestSourceMigration.rows;

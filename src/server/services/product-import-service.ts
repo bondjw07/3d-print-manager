@@ -238,7 +238,7 @@ async function getExistingProductImageHashes(productId: string) {
   return hashes;
 }
 
-async function saveImportedImages(productId: string, title: string, imageUrls: string[]): Promise<SaveImportedImagesResult> {
+export async function saveImportedImages(productId: string, title: string, imageUrls: string[]): Promise<SaveImportedImagesResult> {
   let savedCount = 0;
   let skippedDuplicateCount = 0;
   const existingHashes = await getExistingProductImageHashes(productId);
