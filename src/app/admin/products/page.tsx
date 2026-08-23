@@ -37,7 +37,8 @@ export default async function AdminProductsPage({
   const redirectTo = `/admin/products?${redirectQuery}`;
   const [allProducts, creators, settings, pricingTiers] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings(), getPricingTiers()]);
   const products = allProducts.filter((product) => {
-    const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() : product.category === category);
+    const hasManagedCategory = settings.productCategories.includes(product.category);
+    const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() || !hasManagedCategory : product.category === category);
     return matchesCategory && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
   });
 
