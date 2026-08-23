@@ -552,9 +552,7 @@ export default async function AdminSettingsPage({
                   <a className="text-sm font-medium text-sky-700 hover:underline" href={latestSourceMigration.targetCreatorUrl} target="_blank" rel="noreferrer">Open destination creator</a>
                 </div>
                 {rows.length === 0 ? <p className="text-sm text-amber-700">No imported Thangs products matched this source creator. Check the creator name or add its stored creator URL.</p> : null}
-                <form action={applySourceMigrationRowsAction} className="space-y-3">
-                  <input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" />
-                  <input type="hidden" name="migrationId" value={latestSourceMigration.id} />
+                <div className="space-y-3">
                   <div className="max-h-[32rem] overflow-auto rounded-lg border border-slate-200">
                     <table className="w-full min-w-[900px] text-left text-sm">
                       <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
@@ -565,21 +563,23 @@ export default async function AdminSettingsPage({
                           const canApply = row.status === "PENDING" && Boolean(row.targetReferenceId && row.targetSourceUrl);
                           const confidenceTone = (row.confidence ?? 0) >= 85 ? "migration-confidence-green" : (row.confidence ?? 0) >= 60 ? "migration-confidence-yellow" : "migration-confidence-red";
                           return <tr key={row.id} className="border-t border-slate-200 align-top">
-                            <td className="p-3"><input type="checkbox" name="rowIds" value={row.id} disabled={!canApply} aria-label={`Apply ${row.productTitle}`} /></td>
+                            <td className="p-3"><input form="apply-source-migration" type="checkbox" name="rowIds" value={row.id} disabled={!canApply} aria-label={`Apply ${row.productTitle}`} /></td>
                             <td className="p-3"><a className="font-medium text-sky-700 hover:underline" href={`/admin/products/${row.productId}`}>{row.productTitle}</a>{row.oldSourceUrl ? <a className="mt-1 block text-xs text-slate-500 hover:underline" href={row.oldSourceUrl} target="_blank" rel="noreferrer">Open old listing</a> : null}</td>
                             <td className="p-3 font-mono text-xs text-slate-600">{row.oldReferenceId ?? "—"}</td>
-                            <td className="p-3">{row.targetSourceUrl ? <><a className="font-medium text-sky-700 hover:underline" href={row.targetSourceUrl} target="_blank" rel="noreferrer">{row.targetTitle}</a><p className="mt-1 font-mono text-xs text-slate-600">{row.targetReferenceId}</p></> : <span className="text-rose-700">No candidate</span>}<details className="mt-2"><summary className="cursor-pointer text-xs text-sky-700">Set manual match</summary><div className="mt-2 flex gap-2"><Select name={`targetId-${row.id}`} defaultValue={latestSourceMigration.targets.find((target) => target.referenceId === row.targetReferenceId)?.id ?? ""} className="h-8 min-w-0 flex-1 text-xs"><option value="" disabled>Choose a Kit Kiln listing</option>{latestSourceMigration.targets.map((target) => <option key={target.id} value={target.id}>{target.title} — {target.referenceId}</option>)}</Select><Button type="submit" size="sm" variant="secondary" name="rowId" value={row.id} formAction={setSourceMigrationRowTargetAction} disabled={latestSourceMigration.targets.length === 0}>Save</Button></div>{latestSourceMigration.targets.length === 0 ? <p className="mt-1 text-xs text-amber-700">Upload the CSVs again to populate the target list.</p> : null}</details></td>
+                            <td className="p-3">{row.targetSourceUrl ? <><a className="font-medium text-sky-700 hover:underline" href={row.targetSourceUrl} target="_blank" rel="noreferrer">{row.targetTitle}</a><p className="mt-1 font-mono text-xs text-slate-600">{row.targetReferenceId}</p></> : <span className="text-rose-700">No candidate</span>}<details className="mt-2"><summary className="cursor-pointer text-xs text-sky-700">Set manual match</summary><form action={setSourceMigrationRowTargetAction} className="mt-2 flex gap-2"><input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" /><input type="hidden" name="migrationId" value={latestSourceMigration.id} /><input type="hidden" name="rowId" value={row.id} /><Select name="targetId" defaultValue={latestSourceMigration.targets.find((target) => target.referenceId === row.targetReferenceId)?.id ?? ""} className="h-8 min-w-0 flex-1 text-xs"><option value="" disabled>Choose a Kit Kiln listing</option>{latestSourceMigration.targets.map((target) => <option key={target.id} value={target.id}>{target.title} — {target.referenceId}</option>)}</Select><Button type="submit" size="sm" variant="secondary" disabled={latestSourceMigration.targets.length === 0}>Save</Button></form>{latestSourceMigration.targets.length === 0 ? <p className="mt-1 text-xs text-amber-700">Upload the CSVs again to populate the target list.</p> : null}</details></td>
                             <td className="p-3 text-xs">{row.status === "APPLIED" ? <span className="font-medium text-emerald-700">Applied {row.appliedAt?.toLocaleString()}</span> : row.status === "CONFLICT" ? <span className="text-rose-700">{row.error ?? "Conflict"}</span> : <span className={`inline-flex rounded-full border px-2 py-1 font-medium ${confidenceTone}`}>{row.matchMethod === "Manual URL" ? "Manual match" : `${row.confidence ?? 0}% ${row.matchMethod ?? "candidate"}`}</span>}</td>
                           </tr>;
                         })}
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
+                  <form id="apply-source-migration" action={applySourceMigrationRowsAction} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" />
+                    <input type="hidden" name="migrationId" value={latestSourceMigration.id} />
                     <ConfirmSubmitModalButton variant="primary" confirmTitle="Apply selected Thangs mappings?" confirmMessage="This updates only the selected products’ source ID and URL to the Kit Kiln listing. Product content, images, inventory, listings, and requests are not changed." confirmLabel="Apply selected mappings" disabled={pendingMappedRows.length === 0}>Apply selected mappings</ConfirmSubmitModalButton>
                     <span className="text-xs text-slate-500">{pendingMappedRows.length} pending mappings; {appliedRows.length} applied; {conflictRows.length} conflict{conflictRows.length === 1 ? "" : "s"}.</span>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             );
           })() : <p className="text-sm text-slate-500">No migration scan yet.</p>}
