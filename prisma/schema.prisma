@@ -195,8 +195,24 @@ model SourceMigration {
   scannedAt        DateTime @default(now())
   createdByUserId  String?
   rows             SourceMigrationRow[]
+  targets          SourceMigrationTarget[]
 
   @@index([scannedAt])
+}
+
+model SourceMigrationTarget {
+  id                  String   @id @default(cuid())
+  migrationId         String
+  title               String
+  referenceId         String
+  sourceUrl           String
+  normalizedUrl       String
+  createdAt           DateTime @default(now())
+
+  migration SourceMigration @relation(fields: [migrationId], references: [id], onDelete: Cascade)
+
+  @@unique([migrationId, referenceId])
+  @@index([migrationId, title])
 }
 
 model SourceMigrationRow {

@@ -88,16 +88,6 @@ function similarity(left: string, right: string) {
   return overlap / Math.max(1, leftTokens.size + rightTokens.size - overlap);
 }
 
-function manualTargetFromUrl(sourceUrl: string, targetCreatorUrl: string): TargetModel {
-  const parsed = new URL(sourceUrl);
-  const expectedCreatorPath = new URL(targetCreatorUrl).pathname.toLocaleLowerCase();
-  const creatorPath = parsed.pathname.match(/^\/designer\/[^/]+/i)?.[0]?.toLocaleLowerCase();
-  const referenceId = parsed.pathname.match(/-(\d+)$/)?.[1];
-  if (parsed.hostname !== "thangs.com" || !creatorPath || creatorPath !== expectedCreatorPath || !referenceId) throw new Error("The target URL must be a model listing for the destination creator.");
-  const title = decodeURIComponent(parsed.pathname.split("/").pop() ?? "").replace(/-\d+$/, "").replaceAll("-", " ").trim();
-  return { title, referenceId, sourceUrl: normalizeUrl(sourceUrl), normalizedUrl: normalizeUrl(sourceUrl) };
-}
-
 export async function buildThangsCreatorMigrationFromCsv(input: {
   sourceCreator: string;
   sourceCreatorUrl?: string;
@@ -160,6 +150,14 @@ export async function buildThangsCreatorMigrationFromCsv(input: {
       targetCreator,
       targetCreatorUrl,
       createdByUserId: input.createdByUserId,
+      targets: {
+        create: targetModels.map((target) => ({
+          title: target.title,
+          referenceId: target.referenceId,
+          sourceUrl: target.sourceUrl,
+          normalizedUrl: target.normalizedUrl,
+        })),
+      },
       rows: {
         create: proposedTargets.map(({ product, target, confidence }) => {
           const duplicateProposal = target && (proposedTargetCounts.get(target.referenceId) ?? 0) > 1;
@@ -185,7 +183,10 @@ export async function buildThangsCreatorMigrationFromCsv(input: {
 export async function getLatestSourceMigration() {
   return prisma.sourceMigration.findFirst({
     orderBy: { scannedAt: "desc" },
-    include: { rows: { orderBy: [{ status: "asc" }, { productTitle: "asc" }] } },
+    include: {
+      rows: { orderBy: [{ status: "asc" }, { productTitle: "asc" }] },
+      targets: { orderBy: { title: "asc" } },
+    },
   });
 }
 
@@ -247,13 +248,16 @@ export async function applySourceMigrationRows(input: { migrationId: string; row
   return { applied, conflicts };
 }
 
-export async function setSourceMigrationRowTarget(input: { migrationId: string; rowId: string; targetSourceUrl: string }) {
+export async function setSourceMigrationRowTarget(input: { migrationId: string; rowId: string; targetId: string }) {
   const migration = await prisma.sourceMigration.findUnique({ where: { id: input.migrationId } });
   if (!migration) throw new Error("Migration scan was not found.");
   const row = await prisma.sourceMigrationRow.findFirst({ where: { id: input.rowId, migrationId: migration.id } });
   if (!row || row.status === SourceMigrationStatus.APPLIED) throw new Error("This migration row can no longer be edited.");
 
-  const target = manualTargetFromUrl(input.targetSourceUrl, migration.targetCreatorUrl);
+  const target = await prisma.sourceMigrationTarget.findFirst({
+    where: { id: input.targetId, migrationId: migration.id },
+  });
+  if (!target) throw new Error("Choose a Kit Kiln listing from this migration's catalog.");
 
   await prisma.sourceMigrationRow.update({
     where: { id: row.id },

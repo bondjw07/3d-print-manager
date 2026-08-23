@@ -1476,7 +1476,7 @@ export async function setSourceMigrationRowTargetAction(formData: FormData) {
   const parsed = sourceMigrationManualMatchSchema.safeParse({
     migrationId: formData.get("migrationId"),
     rowId,
-    targetSourceUrl: formData.get(`targetSourceUrl-${rowId}`),
+    targetId: formData.get(`targetId-${rowId}`),
   });
   if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
 

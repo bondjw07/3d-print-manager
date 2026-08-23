@@ -187,7 +187,7 @@ export const sourceMigrationApplySchema = z.object({
 export const sourceMigrationManualMatchSchema = z.object({
   migrationId: z.string().trim().min(1),
   rowId: z.string().trim().min(1),
-  targetSourceUrl: z.url(),
+  targetId: z.string().trim().min(1, "Choose a Kit Kiln listing."),
 });
 
 export const filamentFormSchema = z.object({
