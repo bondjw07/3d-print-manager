@@ -501,7 +501,7 @@ export default async function AdminSettingsPage({
         <CardHeader>
           <CardTitle>Thangs Creator Migration</CardTitle>
           <CardDescription>
-            Scan a destination creator before importing. Exact title matches are proposed for review; applying a checked row updates its stored Thangs identity without changing the product itself.
+            Upload the saved Loot Lab and Kit Kiln catalog CSVs to build a one-time, reviewable migration. No Thangs server fetch is required.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -509,19 +509,27 @@ export default async function AdminSettingsPage({
             <input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" />
             <label className="grid gap-1 text-sm font-medium text-slate-800">
               Existing creator name
-              <Input name="sourceCreator" defaultValue="Loot Lab" required />
+              <Input name="sourceCreator" defaultValue="The Loot Lab" required />
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-800">
               Existing creator URL (optional)
-              <Input name="sourceCreatorUrl" type="url" placeholder="https://thangs.com/designer/..." />
+              <Input name="sourceCreatorUrl" type="url" defaultValue="https://thangs.com/designer/The%20Loot%20Lab" required />
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-800">
               Destination creator URL
               <Input name="targetCreatorUrl" type="url" defaultValue="https://thangs.com/designer/The%20Kit%20Kiln" required />
             </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Loot Lab catalog CSV
+              <Input name="sourceCsv" type="file" accept=".csv,text/csv" required />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">
+              Kit Kiln catalog CSV
+              <Input name="targetCsv" type="file" accept=".csv,text/csv" required />
+            </label>
             <div className="lg:col-span-3">
-              <Button type="submit">Scan and build review</Button>
-              <p className="mt-2 text-xs text-slate-600">The scan does not import models or modify products. It fetches destination listing metadata and saves an auditable review set.</p>
+              <Button type="submit">Build CSV review</Button>
+              <p className="mt-2 text-xs text-slate-600">Every imported Loot Lab product receives a fuzzy Kit Kiln proposal. Green is high confidence, yellow needs review, and red should be manually matched before applying.</p>
             </div>
           </form>
 
@@ -531,12 +539,15 @@ export default async function AdminSettingsPage({
             const pendingMappedRows = mappedRows.filter((row) => row.status === "PENDING");
             const appliedRows = rows.filter((row) => row.status === "APPLIED");
             const conflictRows = rows.filter((row) => row.status === "CONFLICT");
+            const greenRows = pendingMappedRows.filter((row) => (row.confidence ?? 0) >= 85).length;
+            const yellowRows = pendingMappedRows.filter((row) => (row.confidence ?? 0) >= 60 && (row.confidence ?? 0) < 85).length;
+            const redRows = pendingMappedRows.length - greenRows - yellowRows;
             return (
               <div className="space-y-3 rounded-xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div>
                     <p className="font-semibold text-slate-900">Latest review: {latestSourceMigration.sourceCreator} → {latestSourceMigration.targetCreator}</p>
-                    <p className="text-xs text-slate-500">Scanned {latestSourceMigration.scannedAt.toLocaleString()} · {rows.length} source products · {mappedRows.length} exact matches · {rows.length - mappedRows.length} need manual review</p>
+                    <p className="text-xs text-slate-500">Built {latestSourceMigration.scannedAt.toLocaleString()} · {rows.length} source products · <span className="text-emerald-700">{greenRows} green</span> · <span className="text-amber-700">{yellowRows} yellow</span> · <span className="text-rose-700">{redRows} red</span></p>
                   </div>
                   <a className="text-sm font-medium text-sky-700 hover:underline" href={latestSourceMigration.targetCreatorUrl} target="_blank" rel="noreferrer">Open destination creator</a>
                 </div>
@@ -552,12 +563,13 @@ export default async function AdminSettingsPage({
                       <tbody>
                         {rows.map((row) => {
                           const canApply = row.status === "PENDING" && Boolean(row.targetReferenceId && row.targetSourceUrl);
+                          const confidenceTone = (row.confidence ?? 0) >= 85 ? "migration-confidence-green" : (row.confidence ?? 0) >= 60 ? "migration-confidence-yellow" : "migration-confidence-red";
                           return <tr key={row.id} className="border-t border-slate-200 align-top">
                             <td className="p-3"><input type="checkbox" name="rowIds" value={row.id} disabled={!canApply} aria-label={`Apply ${row.productTitle}`} /></td>
                             <td className="p-3"><a className="font-medium text-sky-700 hover:underline" href={`/admin/products/${row.productId}`}>{row.productTitle}</a>{row.oldSourceUrl ? <a className="mt-1 block text-xs text-slate-500 hover:underline" href={row.oldSourceUrl} target="_blank" rel="noreferrer">Open old listing</a> : null}</td>
                             <td className="p-3 font-mono text-xs text-slate-600">{row.oldReferenceId ?? "—"}</td>
-                            <td className="p-3">{row.targetSourceUrl ? <><a className="font-medium text-sky-700 hover:underline" href={row.targetSourceUrl} target="_blank" rel="noreferrer">{row.targetTitle}</a><p className="mt-1 font-mono text-xs text-slate-600">{row.targetReferenceId}</p></> : <div className="space-y-2"><span className="block text-amber-700">No unique exact-title match</span><Input name={`targetSourceUrl-${row.id}`} type="url" placeholder="Paste Kit Kiln listing URL" className="h-8 text-xs" /><Button type="submit" size="sm" variant="secondary" name="rowId" value={row.id} formAction={setSourceMigrationRowTargetAction}>Save manual match</Button></div>}</td>
-                            <td className="p-3 text-xs">{row.status === "APPLIED" ? <span className="font-medium text-emerald-700">Applied {row.appliedAt?.toLocaleString()}</span> : row.status === "CONFLICT" ? <span className="text-rose-700">{row.error ?? "Conflict"}</span> : row.matchMethod ? <span className="text-slate-600">{row.matchMethod} ({row.confidence}%)</span> : <span className="text-slate-500">Needs manual match</span>}</td>
+                            <td className="p-3">{row.targetSourceUrl ? <><a className="font-medium text-sky-700 hover:underline" href={row.targetSourceUrl} target="_blank" rel="noreferrer">{row.targetTitle}</a><p className="mt-1 font-mono text-xs text-slate-600">{row.targetReferenceId}</p></> : <span className="text-rose-700">No candidate</span>}<details className="mt-2"><summary className="cursor-pointer text-xs text-sky-700">Set manual match</summary><div className="mt-2 flex gap-2"><Input name={`targetSourceUrl-${row.id}`} type="url" placeholder="Paste Kit Kiln listing URL" className="h-8 text-xs" /><Button type="submit" size="sm" variant="secondary" name="rowId" value={row.id} formAction={setSourceMigrationRowTargetAction}>Save</Button></div></details></td>
+                            <td className="p-3 text-xs">{row.status === "APPLIED" ? <span className="font-medium text-emerald-700">Applied {row.appliedAt?.toLocaleString()}</span> : row.status === "CONFLICT" ? <span className="text-rose-700">{row.error ?? "Conflict"}</span> : <span className={`inline-flex rounded-full border px-2 py-1 font-medium ${confidenceTone}`}>{row.matchMethod === "Manual URL" ? "Manual match" : `${row.confidence ?? 0}% ${row.matchMethod ?? "candidate"}`}</span>}</td>
                           </tr>;
                         })}
                       </tbody>
@@ -565,7 +577,7 @@ export default async function AdminSettingsPage({
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <ConfirmSubmitModalButton variant="primary" confirmTitle="Apply selected Thangs mappings?" confirmMessage="This updates only the selected products’ source ID and URL to the Kit Kiln listing. Product content, images, inventory, listings, and requests are not changed." confirmLabel="Apply selected mappings" disabled={pendingMappedRows.length === 0}>Apply selected mappings</ConfirmSubmitModalButton>
-                    <span className="text-xs text-slate-500">{pendingMappedRows.length} pending exact match{pendingMappedRows.length === 1 ? "" : "es"}; {appliedRows.length} applied; {conflictRows.length} conflict{conflictRows.length === 1 ? "" : "s"}.</span>
+                    <span className="text-xs text-slate-500">{pendingMappedRows.length} pending mappings; {appliedRows.length} applied; {conflictRows.length} conflict{conflictRows.length === 1 ? "" : "s"}.</span>
                   </div>
                 </form>
               </div>

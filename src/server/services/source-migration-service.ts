@@ -1,7 +1,5 @@
 import { ProductImportSource, SourceMigrationStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { discoverThangsCreatorModelUrls } from "@/server/importers/thangs-importer";
-import { resolveProductImporter } from "@/server/importers/provider";
 
 const THANGS_SOURCE = ProductImportSource.THANGS;
 
@@ -27,23 +25,10 @@ function titleKey(value: string) {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/\|\s*(?:no supports?|no ams|no glue).*$/i, "")
+    .replace(/\b(?:free\s+)?(?:no\s+(?:ams|supports?|glue)|support[- ]?free|easy\s+(?:print|assembly)|beginner\s+friendly)\b/gi, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) {
-  const results: R[] = [];
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 type TargetModel = {
@@ -53,38 +38,82 @@ type TargetModel = {
   normalizedUrl: string;
 };
 
-async function fetchTargetModel(sourceUrl: string): Promise<TargetModel | null> {
-  try {
-    const importer = resolveProductImporter(sourceUrl);
-    if (!importer) return null;
-    const imported = await importer.importFromUrl(sourceUrl);
-    if (!imported.sourceReferenceId) return null;
-    return {
-      title: imported.title,
-      referenceId: imported.sourceReferenceId,
-      sourceUrl: imported.sourceUrl,
-      normalizedUrl: normalizeUrl(imported.sourceUrl),
-    };
-  } catch {
-    // An unavailable individual model should remain unmatched and never block review.
-    return null;
+type CsvModel = TargetModel & { creator: string };
+
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    const next = text[index + 1];
+    if (quoted) {
+      if (character === '"' && next === '"') { cell += '"'; index += 1; }
+      else if (character === '"') quoted = false;
+      else cell += character;
+    } else if (character === '"') quoted = true;
+    else if (character === ",") { row.push(cell); cell = ""; }
+    else if (character === "\n") { row.push(cell.replace(/\r$/, "")); rows.push(row); row = []; cell = ""; }
+    else cell += character;
   }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((values) => values.some((value) => value.trim()));
 }
 
-export async function scanThangsCreatorMigration(input: {
+function parseThangsCsv(text: string, label: string): CsvModel[] {
+  const [header, ...rows] = parseCsv(text);
+  const required = ["creator", "title", "thangs_model_id", "thangs_url"];
+  const columns = new Map((header ?? []).map((value, index) => [value.trim().toLowerCase(), index]));
+  if (!required.every((column) => columns.has(column))) throw new Error(`${label} CSV must include: ${required.join(", ")}.`);
+  const models = rows.map((values, index) => {
+    const value = (column: string) => values[columns.get(column) ?? -1]?.trim() ?? "";
+    const sourceUrl = value("thangs_url");
+    const referenceId = value("thangs_model_id");
+    if (!sourceUrl || !/^\d+$/.test(referenceId)) throw new Error(`${label} CSV row ${index + 2} has an invalid Thangs URL or model ID.`);
+    const parsed = new URL(sourceUrl);
+    if (parsed.hostname !== "thangs.com" || !/^\/designer\/[^/]+\/3d-model\/.+-\d+$/i.test(parsed.pathname)) throw new Error(`${label} CSV row ${index + 2} is not a canonical Thangs model URL.`);
+    return { creator: value("creator"), title: value("title"), referenceId, sourceUrl: normalizeUrl(sourceUrl), normalizedUrl: normalizeUrl(sourceUrl) };
+  });
+  if (!models.length) throw new Error(`${label} CSV has no model rows.`);
+  if (new Set(models.map((model) => model.referenceId)).size !== models.length) throw new Error(`${label} CSV contains duplicate Thangs model IDs.`);
+  return models;
+}
+
+const ignoredTitleTokens = new Set("no ams support supports glue kit kits free print printable easy assembly beginner friendly prop cosplay model the a an of for and with sword dagger axe hammer container weapon chained final fantasy star wars marvel dc halo gun plane class".split(" "));
+function titleTokens(value: string) { return new Set(titleKey(value).split(" ").filter((token) => token && !ignoredTitleTokens.has(token))); }
+function similarity(left: string, right: string) {
+  const leftTokens = titleTokens(left); const rightTokens = titleTokens(right);
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return overlap / Math.max(1, leftTokens.size + rightTokens.size - overlap);
+}
+
+function manualTargetFromUrl(sourceUrl: string, targetCreatorUrl: string): TargetModel {
+  const parsed = new URL(sourceUrl);
+  const expectedCreatorPath = new URL(targetCreatorUrl).pathname.toLocaleLowerCase();
+  const creatorPath = parsed.pathname.match(/^\/designer\/[^/]+/i)?.[0]?.toLocaleLowerCase();
+  const referenceId = parsed.pathname.match(/-(\d+)$/)?.[1];
+  if (parsed.hostname !== "thangs.com" || !creatorPath || creatorPath !== expectedCreatorPath || !referenceId) throw new Error("The target URL must be a model listing for the destination creator.");
+  const title = decodeURIComponent(parsed.pathname.split("/").pop() ?? "").replace(/-\d+$/, "").replaceAll("-", " ").trim();
+  return { title, referenceId, sourceUrl: normalizeUrl(sourceUrl), normalizedUrl: normalizeUrl(sourceUrl) };
+}
+
+export async function buildThangsCreatorMigrationFromCsv(input: {
   sourceCreator: string;
   sourceCreatorUrl?: string;
   targetCreatorUrl: string;
+  sourceCsv: string;
+  targetCsv: string;
   createdByUserId?: string;
 }) {
   const sourceCreator = input.sourceCreator.trim();
   const sourceCreatorUrl = input.sourceCreatorUrl?.trim() || undefined;
   if (!sourceCreator) throw new Error("Source creator name is required.");
 
-  const targetDiscovery = await discoverThangsCreatorModelUrls({ creatorUrl: input.targetCreatorUrl, maxPages: 200 });
-  const targetModels = (await mapWithConcurrency(targetDiscovery.modelUrls, 5, fetchTargetModel)).filter(
-    (model): model is TargetModel => Boolean(model),
-  );
+  const sourceModels = parseThangsCsv(input.sourceCsv, "Loot Lab");
+  const targetModels = parseThangsCsv(input.targetCsv, "Kit Kiln");
+  const targetCreatorUrl = normalizeUrl(input.targetCreatorUrl);
+  const targetCreator = targetModels[0]?.creator || "Target creator";
 
   const sourceCreatorUrlKey = sourceCreatorUrl ? normalizeCreatorUrl(sourceCreatorUrl) : null;
   const products = await prisma.product.findMany({
@@ -102,32 +131,38 @@ export async function scanThangsCreatorMigration(input: {
     orderBy: { publicName: "asc" },
   });
   const sourceNameKey = creatorKey(sourceCreator);
+  const sourceByReferenceId = new Map(sourceModels.map((model) => [model.referenceId, model]));
+  const sourceByUrl = new Map(sourceModels.map((model) => [model.normalizedUrl, model]));
   const sourceProducts = products.filter((product) => {
     const matchesName = product.importSourceCreatorName ? creatorKey(product.importSourceCreatorName) === sourceNameKey : false;
     const matchesUrl = sourceCreatorUrlKey && product.importSourceCreatorUrl
       ? normalizeCreatorUrl(product.importSourceCreatorUrl) === sourceCreatorUrlKey
       : false;
-    return matchesName || matchesUrl;
+    return Boolean(sourceByReferenceId.get(product.importSourceReferenceId ?? "") || sourceByUrl.get(product.importSourceNormalizedUrl ?? "") || matchesName || matchesUrl);
   });
 
-  const targetsByTitle = new Map<string, TargetModel[]>();
-  for (const target of targetModels) {
-    const key = titleKey(target.title);
-    if (!key) continue;
-    targetsByTitle.set(key, [...(targetsByTitle.get(key) ?? []), target]);
-  }
+  const proposedTargets = sourceProducts.map((product) => {
+    const source = sourceByReferenceId.get(product.importSourceReferenceId ?? "") ?? sourceByUrl.get(product.importSourceNormalizedUrl ?? "");
+    const matchTitle = source?.title || product.publicName;
+    const ranked = targetModels.map((target) => ({ target, score: similarity(matchTitle, target.title) })).sort((left, right) => right.score - left.score);
+    const best = ranked[0]; const runnerUp = ranked[1];
+    const confidence = Math.round((best?.score ?? 0) * 100);
+    const ambiguous = Boolean(runnerUp && best && best.score - runnerUp.score < 0.1);
+    return { product, target: best?.target, confidence: ambiguous ? Math.min(confidence, 55) : confidence };
+  });
+  const proposedTargetCounts = new Map<string, number>();
+  for (const proposal of proposedTargets) if (proposal.target) proposedTargetCounts.set(proposal.target.referenceId, (proposedTargetCounts.get(proposal.target.referenceId) ?? 0) + 1);
 
   return prisma.sourceMigration.create({
     data: {
       sourceCreator,
       sourceCreatorUrl: sourceCreatorUrl ?? null,
-      targetCreator: targetDiscovery.creatorName ?? "Target creator",
-      targetCreatorUrl: targetDiscovery.creatorUrl,
+      targetCreator,
+      targetCreatorUrl,
       createdByUserId: input.createdByUserId,
       rows: {
-        create: sourceProducts.map((product) => {
-          const candidates = targetsByTitle.get(titleKey(product.publicName)) ?? targetsByTitle.get(titleKey(product.internalName)) ?? [];
-          const target = candidates.length === 1 ? candidates[0] : null;
+        create: proposedTargets.map(({ product, target, confidence }) => {
+          const duplicateProposal = target && (proposedTargetCounts.get(target.referenceId) ?? 0) > 1;
           return {
             productId: product.id,
             productTitle: product.publicName,
@@ -138,13 +173,13 @@ export async function scanThangsCreatorMigration(input: {
             targetReferenceId: target?.referenceId,
             targetSourceUrl: target?.sourceUrl,
             targetNormalizedUrl: target?.normalizedUrl,
-            matchMethod: target ? "Exact normalized title" : null,
-            confidence: target ? 100 : null,
+            matchMethod: duplicateProposal ? "Fuzzy title — duplicate candidate" : "Fuzzy title",
+            confidence: duplicateProposal ? Math.min(confidence, 35) : confidence,
           };
         }),
       },
     },
-  });
+  }).then((migration) => ({ migration, sourceCatalogCount: sourceModels.length, targetCatalogCount: targetModels.length }));
 }
 
 export async function getLatestSourceMigration() {
@@ -218,13 +253,7 @@ export async function setSourceMigrationRowTarget(input: { migrationId: string; 
   const row = await prisma.sourceMigrationRow.findFirst({ where: { id: input.rowId, migrationId: migration.id } });
   if (!row || row.status === SourceMigrationStatus.APPLIED) throw new Error("This migration row can no longer be edited.");
 
-  const target = await fetchTargetModel(input.targetSourceUrl);
-  if (!target) throw new Error("Unable to read a Thangs model ID from that target listing.");
-  const targetCreatorUrl = new URL(target.sourceUrl).pathname.match(/^\/designer\/[^/]+/i)?.[0];
-  const expectedCreatorUrl = new URL(migration.targetCreatorUrl).pathname;
-  if (!targetCreatorUrl || targetCreatorUrl.toLocaleLowerCase() !== expectedCreatorUrl.toLocaleLowerCase()) {
-    throw new Error("The selected listing does not belong to this migration's destination creator.");
-  }
+  const target = manualTargetFromUrl(input.targetSourceUrl, migration.targetCreatorUrl);
 
   await prisma.sourceMigrationRow.update({
     where: { id: row.id },

@@ -75,7 +75,7 @@ import {
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
-import { applySourceMigrationRows, scanThangsCreatorMigration, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
+import { applySourceMigrationRows, buildThangsCreatorMigrationFromCsv, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
 import {
   filamentBulkCostUpdateSchema,
   filamentFormSchema,
@@ -1430,10 +1430,21 @@ export async function scanThangsCreatorMigrationAction(formData: FormData) {
   const parsed = sourceMigrationScanSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
 
+  const sourceCsv = formData.get("sourceCsv");
+  const targetCsv = formData.get("targetCsv");
+  if (!(sourceCsv instanceof File) || sourceCsv.size === 0 || !(targetCsv instanceof File) || targetCsv.size === 0) {
+    redirect(appendStatus(redirectTo, "error", "Upload both the Loot Lab and Kit Kiln CSV files."));
+  }
+
   try {
-    const migration = await scanThangsCreatorMigration({ ...parsed.data, createdByUserId: user.id });
+    const result = await buildThangsCreatorMigrationFromCsv({
+      ...parsed.data,
+      sourceCsv: await sourceCsv.text(),
+      targetCsv: await targetCsv.text(),
+      createdByUserId: user.id,
+    });
     revalidatePath("/admin/settings");
-    redirect(appendStatus(redirectTo, "success", `Scan complete: ${migration.id}. Review the mapped rows below.`));
+    redirect(appendStatus(redirectTo, "success", `Review built from ${result.sourceCatalogCount} Loot Lab and ${result.targetCatalogCount} Kit Kiln listings. Review the proposed mappings below.`));
   } catch (error) {
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Migration scan failed."));
   }
