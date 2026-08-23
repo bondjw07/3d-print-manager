@@ -47,15 +47,15 @@ export function ProductPhotoCarousel({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-xl space-y-3">
       <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-        <div className="relative w-full" style={{ aspectRatio: "4 / 3" }}>
+        <div className="relative h-60 max-h-[50vh] w-full sm:h-72 lg:h-80">
           <Image
             src={selectedImage.imagePath}
             alt={selectedImage.altText ?? productName}
             fill
-            sizes="(max-width: 1279px) 100vw, 440px"
-            className="object-cover"
+            sizes="(max-width: 639px) calc(100vw - 3rem), 576px"
+            className="object-contain"
           />
         </div>
 
