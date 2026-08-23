@@ -29,13 +29,13 @@ import {
   testShopifyConnectionAction,
   scanThangsCreatorMigrationAction,
   importThangsCatalogCsvAction,
-  importEnrichedThangsCsvAction,
   setSourceMigrationRowTargetAction,
   updatePublicAppUrlAction,
   updateProductCategoriesAction,
   updatePricingTierAction,
   updateSettingsAction,
 } from "@/server/actions/portal-actions";
+import { ThangsEnrichedCsvImportForm } from "@/components/admin/thangs-enriched-csv-import-form";
 import { getManagedCreators } from "@/server/services/creator-service";
 import { getMyMiniFactoryIntegrationStatus } from "@/server/services/myminifactory-auth-service";
 import { getShopifyIntegrationStatus } from "@/server/services/shopify-auth-service";
@@ -554,7 +554,7 @@ export default async function AdminSettingsPage({
             <p className="mt-1 text-xs text-slate-600">First download a queue of only missing models, run the Chrome Snippet against that queue, then upload its enriched CSV here.</p>
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               <form action="/api/admin/thangs-enrichment-queue" method="post" encType="multipart/form-data" className="flex items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-medium">Kit Kiln catalog CSV<Input name="catalogCsv" type="file" accept=".csv,text/csv" required /></label><Button type="submit" variant="secondary">Download queue</Button></form>
-              <form action={importEnrichedThangsCsvAction} className="flex items-end gap-2"><input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" /><input type="hidden" name="creatorUrl" value="https://thangs.com/designer/The%20Kit%20Kiln" /><label className="grid flex-1 gap-1 text-xs font-medium">Chrome-enriched CSV<Input name="enrichedCsv" type="file" accept=".csv,text/csv" required /></label><Button type="submit">Import enriched drafts</Button></form>
+              <ThangsEnrichedCsvImportForm />
             </div>
           </div>
 
