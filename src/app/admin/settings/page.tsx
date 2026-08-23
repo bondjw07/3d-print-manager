@@ -505,7 +505,7 @@ export default async function AdminSettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <form action={scanThangsCreatorMigrationAction} className="grid gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 lg:grid-cols-3">
+          <form action={scanThangsCreatorMigrationAction} className="grid gap-3 rounded-xl border border-border bg-surface-muted p-4 lg:grid-cols-3">
             <input type="hidden" name="redirectTo" value="/admin/settings?tab=operations" />
             <label className="grid gap-1 text-sm font-medium text-slate-800">
               Existing creator name

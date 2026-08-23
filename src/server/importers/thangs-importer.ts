@@ -1,4 +1,4 @@
-import { fetchMirrorPage, fetchPageWithFallback } from "./page-fetcher";
+import { fetchPageWithFallback } from "./page-fetcher";
 import type { ImportedProductData, ProductUrlImporter } from "./types";
 
 function decodeHtml(value: string) {
@@ -197,7 +197,10 @@ export async function discoverThangsCreatorModelUrls(input: { creatorUrl: string
 
       let fetchedBody: string;
       try {
-        const fetched = await fetchMirrorPage(pageUrl);
+        // Creator discovery used to force the Jina mirror. A mirror 403 then made
+        // the whole migration scan unavailable even when Thangs itself was
+        // reachable. Prefer the direct page and retain the mirror as fallback.
+        const fetched = await fetchPageWithFallback(pageUrl);
         fetchedBody = fetched.body;
       } catch (error) {
         if (rootIndex === 0 && page === 1) {
