@@ -68,19 +68,26 @@ export default async function ProductDetailPage({
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         <Card className="overflow-hidden">
           <div className="grid gap-3 p-4">
-            <div className="relative h-[360px] w-full overflow-hidden rounded-2xl bg-slate-100">
+            <div className="relative h-64 max-h-[55vh] w-full overflow-hidden rounded-2xl bg-slate-100 sm:h-80 lg:h-96">
               <Image
                 src={images[0].imagePath}
                 alt={images[0].altText ?? product.publicName}
                 fill
                 className="object-cover"
+                sizes="(max-width: 1023px) calc(100vw - 2rem), 55vw"
               />
             </div>
             {images.length > 1 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {images.slice(1).map((image) => (
                   <div key={image.id} className="relative h-28 overflow-hidden rounded-xl border border-slate-200">
-                    <Image src={image.imagePath} alt={image.altText ?? product.publicName} fill className="object-cover" />
+                    <Image
+                      src={image.imagePath}
+                      alt={image.altText ?? product.publicName}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 639px) calc(50vw - 1.5rem), 33vw"
+                    />
                   </div>
                 ))}
               </div>
