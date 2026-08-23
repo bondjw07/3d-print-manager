@@ -14,6 +14,21 @@ function normalizeUrl(value: string) {
   return parsed.toString();
 }
 
+function cleanImportedThangsTitle(value: string) {
+  let title = value.split("|")[0]?.trim() ?? value.trim();
+  title = title.replace(/\s*\(\s*No Supports?\s*\/\s*AMS\s*\/\s*Glue\s*\)\s*$/i, "").trim();
+  const suffixIndex = title.lastIndexOf(" - ");
+  if (suffixIndex >= 0 && /\bkit\s*$/i.test(title.slice(suffixIndex + 3))) {
+    title = title.slice(0, suffixIndex).trim();
+  }
+  return title.replace(/\s+kit\s*$/i, "").trim() || value.trim();
+}
+
+function cleanImportedThangsDescription(value: string) {
+  const marker = /(?:^|\n)\s*[_*`>\-\s]*want your print to look just like ours\?[\s\S]*$/i;
+  return value.replace(marker, "").trim();
+}
+
 function parseCsv(text: string) {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -95,10 +110,11 @@ export async function importMissingThangsProductsFromCsv(input: { csv: string; c
     });
     if (existing) { skipped += 1; continue; }
 
+    const productTitle = cleanImportedThangsTitle(model.title);
     try {
       await createProduct({
-        internalName: model.title,
-        publicName: model.title,
+        internalName: productTitle,
+        publicName: productTitle,
         shortDescription: "Imported from the Kit Kiln catalog CSV. Review source details before publishing.",
         fullDescription: "Imported from a Thangs catalog CSV because source-page enrichment was unavailable. Review the source listing, description, images, and print details before publishing.",
         category: "Imported",
@@ -109,7 +125,7 @@ export async function importMissingThangsProductsFromCsv(input: { csv: string; c
         isRequestable: false,
         isListable: false,
         inventoryMode: "MADE_TO_ORDER",
-        productionNotes: `Imported from Thangs catalog CSV.\nImported URL: ${model.sourceUrl}\nSource reference id: ${model.referenceId}\nCreator: ${model.creator || "The Kit Kiln"}\nReview details before publishing.`,
+        productionNotes: `Imported from Thangs catalog CSV.\nOriginal Thangs title: ${model.title}\nImported URL: ${model.sourceUrl}\nSource reference id: ${model.referenceId}\nCreator: ${model.creator || "The Kit Kiln"}\nReview details before publishing.`,
         printNotes: "Catalog-only import. Review dimensions, materials, parts list, and production requirements.",
         importSource: ProductImportSource.THANGS,
         importSourceReferenceId: model.referenceId,
@@ -138,23 +154,24 @@ export async function importEnrichedThangsProductsFromCsv(input: { csv: string; 
   let created = 0; let skipped = 0;
   for (let index = 0; index < models.length; index += 1) {
     const model = models[index]; const row = rows[index];
+    const productTitle = cleanImportedThangsTitle(model.title);
     const value = (column: string) => row[columns.get(column) ?? -1]?.trim() ?? "";
     const existing = await prisma.product.findFirst({ where: { importSource: ProductImportSource.THANGS, OR: [{ importSourceReferenceId: model.referenceId }, { importSourceNormalizedUrl: model.normalizedUrl }] }, select: { id: true } });
     if (existing) { skipped += 1; continue; }
     const product = await createProduct({
-      internalName: model.title, publicName: model.title,
-      shortDescription: (value("short_description") || model.title).slice(0, 180),
-      fullDescription: value("full_description") || value("short_description") || model.title,
+      internalName: productTitle, publicName: productTitle,
+      shortDescription: (cleanImportedThangsDescription(value("short_description")) || productTitle).slice(0, 180),
+      fullDescription: cleanImportedThangsDescription(value("full_description")) || cleanImportedThangsDescription(value("short_description")) || productTitle,
       category: value("category") || "Imported", tags: value("tags"), sku: await ensureUniqueSku(`THG-${model.referenceId}`),
       status: "DRAFT", isPublic: false, isRequestable: false, isListable: false, inventoryMode: "MADE_TO_ORDER",
-      productionNotes: `Imported from Chrome-enriched Thangs CSV.\nImported URL: ${model.sourceUrl}\nSource reference id: ${model.referenceId}\nCreator: ${model.creator || "The Kit Kiln"}\nReview before publishing.`,
+      productionNotes: `Imported from Chrome-enriched Thangs CSV.\nOriginal Thangs title: ${model.title}\nImported URL: ${model.sourceUrl}\nSource reference id: ${model.referenceId}\nCreator: ${model.creator || "The Kit Kiln"}\nReview before publishing.`,
       printNotes: "Review dimensions, images, materials, parts list, and production requirements.",
       importSource: ProductImportSource.THANGS, importSourceReferenceId: model.referenceId, importSourceUrl: model.sourceUrl, importSourceNormalizedUrl: model.normalizedUrl,
       importSourceCreatorName: model.creator || "The Kit Kiln", importSourceCreatorUrl: normalizeUrl(input.creatorUrl),
     });
     try {
       const imageUrls = JSON.parse(value("image_urls_json"));
-      if (Array.isArray(imageUrls)) await saveImportedImages(product.id, model.title, imageUrls.filter((url): url is string => typeof url === "string"));
+      if (Array.isArray(imageUrls)) await saveImportedImages(product.id, productTitle, imageUrls.filter((url): url is string => typeof url === "string"));
     } catch {
       // Product metadata remains usable if an individual image URL is invalid or unavailable.
     }
