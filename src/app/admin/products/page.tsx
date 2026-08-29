@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { DollarSign, Folder } from "lucide-react";
+import { ArrowDown, ArrowUp, DollarSign, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,10 +22,13 @@ import {
   bulkUpdateProductControlsAction,
 } from "@/server/actions/portal-actions";
 
+const productSortFields = ["product", "sku", "status", "visibility", "requestable", "tier", "estimatedCost", "inventory", "updated"] as const;
+type ProductSortField = (typeof productSortFields)[number];
+
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; sort?: string; direction?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "bulk" || params.view === "imports" ? params.view : "catalog";
@@ -33,14 +36,56 @@ export default async function AdminProductsPage({
   const category = params.category === "__NONE__" ? "__NONE__" : params.category?.trim() ?? "";
   const status = productStatusOptions.includes(params.status as (typeof productStatusOptions)[number]) ? params.status! : "";
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
-  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}) });
+  const sort = productSortFields.includes(params.sort as ProductSortField) ? params.sort as ProductSortField : null;
+  const direction = params.direction === "desc" ? "desc" : "asc";
+  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(sort ? { sort, direction } : {}) });
   const redirectTo = `/admin/products?${redirectQuery}`;
   const [allProducts, creators, settings, pricingTiers] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings(), getPricingTiers()]);
-  const products = allProducts.filter((product) => {
+  const filteredProducts = allProducts.filter((product) => {
     const hasManagedCategory = settings.productCategories.includes(product.category);
     const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() || !hasManagedCategory : product.category === category);
     return matchesCategory && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
   });
+  const products = [...filteredProducts].sort((left, right) => {
+    if (!sort) {
+      return 0;
+    }
+
+    const valueFor = (product: typeof filteredProducts[number]) => {
+      switch (sort) {
+        case "product": return product.publicName;
+        case "sku": return product.sku;
+        case "status": return product.status;
+        case "visibility": return Number(product.isPublic);
+        case "requestable": return Number(product.isRequestable);
+        case "tier": return product.pricingTier?.label ?? "";
+        case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost ?? -1;
+        case "inventory": return product.inventoryRecord?.available ?? -1;
+        case "updated": return product.updatedAt.getTime();
+      }
+    };
+    const leftValue = valueFor(left);
+    const rightValue = valueFor(right);
+    const comparison = typeof leftValue === "string" && typeof rightValue === "string"
+      ? leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: "base" })
+      : Number(leftValue) - Number(rightValue);
+
+    return direction === "desc" ? -comparison : comparison;
+  });
+  const sortHref = (field: ProductSortField) => {
+    const nextDirection = sort === field && direction === "asc" ? "desc" : "asc";
+    const query = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), sort: field, direction: nextDirection });
+    return `/admin/products?${query}`;
+  };
+  const sortableHeader = (label: string, field: ProductSortField) => {
+    const isSorted = sort === field;
+    const SortIcon = isSorted && direction === "desc" ? ArrowDown : ArrowUp;
+    return <th className="px-2 py-2" aria-sort={isSorted ? (direction === "asc" ? "ascending" : "descending") : "none"}>
+      <Link href={sortHref(field)} className="inline-flex items-center gap-1 rounded text-left hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500">
+        {label}<SortIcon className={`h-3.5 w-3.5 ${isSorted ? "text-sky-600" : "text-slate-400"}`} aria-hidden />
+      </Link>
+    </th>;
+  };
 
   return (
     <div className="space-y-4">
@@ -79,6 +124,7 @@ export default async function AdminProductsPage({
           {view === "imports" ? <ProductImportsDropdown /> : <>
           <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_160px_150px_auto]" action="/admin/products" method="get">
             <input type="hidden" name="view" value={view} />
+            {sort ? <><input type="hidden" name="sort" value={sort} /><input type="hidden" name="direction" value={direction} /></> : null}
             <Input name="q" defaultValue={q} placeholder="Search by internal name, public name, or SKU" />
             {view === "bulk" ? <><Select name="category" defaultValue={category}><option value="">All categories</option><option value="__NONE__">No category selected</option>{settings.productCategories.map((value) => <option key={value} value={value}>{value}</option>)}</Select><Select name="status" defaultValue={status}><option value="">All statuses</option>{productStatusOptions.map((value) => <option key={value} value={value}>{humanizeEnum(value)}</option>)}</Select><Select name="visibility" defaultValue={visibility}><option value="">All visibility</option><option value="public">Public</option><option value="private">Private</option></Select></> : null}
             <Button type="submit" variant="secondary">
@@ -198,14 +244,14 @@ export default async function AdminProductsPage({
                     </div>
                   </th> : null}
                   <th className="px-2 py-2">Thumb</th>
-                  <th className="px-2 py-2">Product</th>
-                  <th className="px-2 py-2">SKU</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">Visibility</th>
-                  <th className="px-2 py-2">Requestable</th>
-                  {view === "bulk" ? <><th className="px-2 py-2">Tier</th><th className="px-2 py-2">Est. cost</th></> : null}
-                  <th className="px-2 py-2">Inventory</th>
-                  <th className="px-2 py-2">Updated</th>
+                  {sortableHeader("Product", "product")}
+                  {sortableHeader("SKU", "sku")}
+                  {sortableHeader("Status", "status")}
+                  {sortableHeader("Visibility", "visibility")}
+                  {sortableHeader("Requestable", "requestable")}
+                  {view === "bulk" ? <>{sortableHeader("Tier", "tier")}{sortableHeader("Est. cost", "estimatedCost")}</> : null}
+                  {sortableHeader("Inventory", "inventory")}
+                  {sortableHeader("Updated", "updated")}
                 </tr>
               </thead>
               <tbody>
