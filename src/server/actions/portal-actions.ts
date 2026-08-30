@@ -48,6 +48,7 @@ import {
   updateProductCategories,
   updatePublicAppUrl,
   updateBambuBuddyBaseUrl,
+  updateDefaultFilamentSpoolCost,
   updateProcessingEstimateSettings,
   updateAppVersion,
   getSettings,
@@ -78,6 +79,7 @@ import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/serve
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
 import { getBambuBuddyApiKey, saveBambuBuddyApiKey } from "@/server/services/bambuddy-auth-service";
+import { upsertBambuBuddyFilamentMapping } from "@/server/services/bambuddy-filament-mapping-service";
 import { applySourceMigrationRows, buildThangsCreatorMigrationFromCsv, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
 import { importEnrichedThangsProductsFromCsv, importMissingThangsProductsFromCsv } from "@/server/services/thangs-csv-import-service";
 import {
@@ -104,6 +106,8 @@ import {
   publicAppUrlSchema,
   bambuBuddyBaseUrlSchema,
   bambuBuddyApiKeySchema,
+  bambuBuddyFilamentMappingSchema,
+  defaultFilamentSpoolCostSchema,
   queueCreateSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
@@ -246,7 +250,17 @@ export async function refreshProductFromUrlAction(formData: FormData) {
 }
 
 function finiteNonNegativeNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined;
+}
+
+function normalizeBambuBuddyFilamentRequirement(input: { type?: unknown; color?: unknown; used_g?: unknown }) {
+  const materialType = typeof input.type === "string" ? input.type.trim().toUpperCase() : "";
+  const hexColor = typeof input.color === "string" ? input.color.trim().toUpperCase() : "";
+  const grams = finiteNonNegativeNumber(input.used_g);
+  return materialType && /^#[0-9A-F]{6}$/.test(hexColor) && grams !== undefined
+    ? { materialType, hexColor, estimatedGramsPerPrint: grams }
+    : null;
 }
 
 export async function importBambuBuddyProductDataAction(formData: FormData) {
@@ -280,13 +294,22 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
     const payload = await response.json() as {
       print_time_seconds?: unknown;
       filament_used_grams?: unknown;
-      metadata?: { print_time_seconds?: unknown; filament_used_grams?: unknown };
+      metadata?: { print_time_seconds?: unknown; filament_used_grams?: unknown; filament_slots?: Array<{ type?: unknown; color?: unknown; used_g?: unknown }> };
     };
     printTimeSeconds = finiteNonNegativeNumber(payload.metadata?.print_time_seconds ?? payload.print_time_seconds);
     filamentUsedGrams = finiteNonNegativeNumber(payload.metadata?.filament_used_grams ?? payload.filament_used_grams);
+    const groupedRequirements = new Map<string, { materialType: string; hexColor: string; estimatedGramsPerPrint: number }>();
+    for (const slot of payload.metadata?.filament_slots ?? []) {
+      const requirement = normalizeBambuBuddyFilamentRequirement(slot);
+      if (!requirement) continue;
+      const key = `${requirement.materialType}:${requirement.hexColor}`;
+      const existing = groupedRequirements.get(key);
+      groupedRequirements.set(key, existing ? { ...existing, estimatedGramsPerPrint: existing.estimatedGramsPerPrint + requirement.estimatedGramsPerPrint } : requirement);
+    }
 
-    await updateBambuBuddyProductData({ productId, fileId, printTimeSeconds, filamentUsedGrams });
+    await updateBambuBuddyProductData({ productId, fileId, printTimeSeconds, filamentUsedGrams, filamentRequirements: [...groupedRequirements.values()] });
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "BambuBuddy import failed."));
   }
 
@@ -1448,6 +1471,100 @@ export async function saveBambuBuddyApiKeyAction(formData: FormData) {
   await saveBambuBuddyApiKey(parsed.data.bambuBuddyApiKey);
   revalidatePath("/admin/settings");
   redirect(appendStatus(redirectTo, "success", "BambuBuddy API key saved."));
+}
+
+export async function saveBambuBuddyFilamentMappingAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = bambuBuddyFilamentMappingSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  try {
+    await upsertBambuBuddyFilamentMapping(parsed.data);
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save BambuBuddy mapping."));
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  redirect(appendStatus(redirectTo, "success", "BambuBuddy filament mapping saved."));
+}
+
+function deriveBambuBuddyMaterialType(material: string, suppliedType: string) {
+  if (suppliedType.trim()) return suppliedType.trim();
+  const uppercase = material.toUpperCase();
+  const known = ["PLA", "PETG", "ABS", "ASA", "TPU", "PA", "PC"];
+  return known.find((type) => new RegExp(`\\b${type}\\b`).test(uppercase)) ?? material;
+}
+
+function parseCsvRows(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') { cell += '"'; index += 1; } else quoted = !quoted;
+    } else if (char === "," && !quoted) { row.push(cell); cell = ""; }
+    else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(cell); if (row.some((value) => value.length > 0)) rows.push(row); row = []; cell = "";
+    } else cell += char;
+  }
+  row.push(cell); if (row.some((value) => value.length > 0)) rows.push(row);
+  const [headers, ...values] = rows;
+  if (!headers) return [];
+  const normalizedHeaders = headers.map((header) => header.replace(/^\uFEFF/, "").trim().toLowerCase().replace(/\s+/g, "_"));
+  return values.map((cells) => Object.fromEntries(normalizedHeaders.map((header, index) => [header, cells[index]?.trim() ?? ""])));
+}
+
+export async function importBambuBuddyFilamentMappingsAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const upload = formData.get("mappingFile");
+  const suppliedMaterialType = String(formData.get("materialType") ?? "");
+  if (!(upload instanceof File) || upload.size === 0) redirect(appendStatus(redirectTo, "error", "Choose a JSON mapping file."));
+  try {
+    const text = await upload.text();
+    const isCsv = upload.name.toLowerCase().endsWith(".csv") || upload.type.includes("csv");
+    const payload: unknown = isCsv ? null : JSON.parse(text);
+    const rows = isCsv ? parseCsvRows(text) : Array.isArray(payload) ? payload : Array.isArray((payload as { filaments?: unknown[] })?.filaments) ? (payload as { filaments: unknown[] }).filaments : null;
+    if (!rows) throw new Error("JSON must be an array of filament mapping rows.");
+    let imported = 0;
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const value = row as Record<string, unknown>;
+      const material = typeof value.material === "string" ? value.material : typeof value.type === "string" ? value.type : "";
+      const hexColor = typeof value.hex_color === "string" ? value.hex_color : "";
+      const colorName = typeof value.color_name === "string" ? value.color_name : "";
+      if (!material || !hexColor || !colorName) continue;
+      await upsertBambuBuddyFilamentMapping({
+        materialType: deriveBambuBuddyMaterialType(material, suppliedMaterialType), hexColor, colorName,
+        manufacturer: typeof value.manufacturer === "string" ? value.manufacturer : undefined,
+        materialName: material,
+        effectType: typeof value.sub_type === "string" ? value.sub_type : typeof value.effect_type === "string" ? value.effect_type : undefined,
+      });
+      imported += 1;
+    }
+    if (!imported) throw new Error("No valid mapping rows were found.");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/products");
+    redirect(appendStatus(redirectTo, "success", `Imported or updated ${imported} BambuBuddy mapping${imported === 1 ? "" : "s"}.`));
+  } catch (error) {
+    rethrowNextRedirect(error);
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to import mappings."));
+  }
+}
+
+export async function updateDefaultFilamentSpoolCostAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = defaultFilamentSpoolCostSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await updateDefaultFilamentSpoolCost(parsed.data.defaultFilamentSpoolCost);
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/listings");
+  redirect(appendStatus(redirectTo, "success", "Default filament spool cost saved."));
 }
 
 export async function updateProcessingEstimateSettingsAction(formData: FormData) {

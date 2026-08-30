@@ -175,6 +175,7 @@ model Product {
 
   images               ProductImage[]
   filamentRequirements ProductFilamentRequirement[]
+  bambuBuddyFilamentRequirements ProductBambuBuddyFilamentRequirement[]
   listings             MarketplaceListing[]
   requests             Request[]
   queueItems           QueueItem[]
@@ -330,6 +331,35 @@ model ProductFilamentRequirement {
   @@index([productId, sortOrder])
 }
 
+model BambuBuddyFilamentMapping {
+  id           String   @id @default(cuid())
+  materialType String
+  hexColor     String
+  manufacturer String?
+  colorName    String
+  materialName String?
+  effectType   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([materialType, hexColor])
+  @@index([hexColor])
+}
+
+model ProductBambuBuddyFilamentRequirement {
+  id                     String   @id @default(cuid())
+  productId              String
+  materialType           String
+  hexColor               String
+  estimatedGramsPerPrint Decimal  @db.Decimal(8, 2)
+  sortOrder              Int      @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, materialType, hexColor])
+  @@index([productId, sortOrder])
+}
+
 model MarketplaceListing {
   id                String          @id @default(cuid())
   productId         String
@@ -468,6 +498,7 @@ model AppSetting {
   publicAppUrl                       String?
   bambuBuddyBaseUrl                  String?
   bambuBuddyApiKeyEncrypted          String?
+  defaultFilamentSpoolCost            Decimal         @default(20) @db.Decimal(10, 2)
   productCategories                  String[]        @default([])
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt

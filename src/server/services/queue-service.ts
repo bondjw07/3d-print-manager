@@ -44,6 +44,7 @@ export async function getQueueItems(filters?: {
               },
             },
           },
+          bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
         },
       },
       requesterUser: true,

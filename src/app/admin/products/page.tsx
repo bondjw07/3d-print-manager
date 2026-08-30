@@ -70,7 +70,7 @@ export default async function AdminProductsPage({
         case "visibility": return Number(product.isPublic);
         case "requestable": return Number(product.isRequestable);
         case "tier": return product.pricingTier?.label ?? "";
-        case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost ?? -1;
+        case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }).calculatedCost ?? -1;
         case "inventory": return product.inventoryRecord?.available ?? -1;
         case "updated": return product.updatedAt.getTime();
       }
@@ -374,7 +374,7 @@ export default async function AdminProductsPage({
                         {product.isRequestable ? "Yes" : "No"}
                       </Link>
                     </td>
-                    {view === "bulk" ? <><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{product.pricingTier?.label ?? "No tier"}</Link></td><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }); return estimate.calculatedCost === null ? "—" : formatCurrency(estimate.calculatedCost); })()}</Link></td></> : null}
+                    {view === "bulk" ? <><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{product.pricingTier?.label ?? "No tier"}</Link></td><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }); return estimate.calculatedCost === null ? "—" : formatCurrency(estimate.calculatedCost); })()}</Link></td></> : null}
                     <td className="px-0 py-0">
                       <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">
                         {product.inventoryRecord ? `${product.inventoryRecord.available} available` : "No record"}

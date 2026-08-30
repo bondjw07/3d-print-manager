@@ -88,6 +88,7 @@ export async function getListingProductIndex({
           include: { filament: { select: { name: true, spoolCostPerKg: true } } },
           orderBy: [{ sortOrder: "asc" }],
         },
+        bambuBuddyFilamentRequirements: { orderBy: [{ sortOrder: "asc" }] },
       },
       orderBy: [{ publicName: "asc" }],
       skip: (safePage - 1) * pageSize,

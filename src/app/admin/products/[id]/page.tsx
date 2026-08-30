@@ -17,15 +17,11 @@ import { formatDateTime } from "@/lib/utils";
 import { humanizeEnum, productStatusOptions } from "@/lib/domain";
 import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
 import { calculateRequestEstimate } from "@/lib/request-estimates";
-import { prisma } from "@/lib/prisma";
 import {
   addProductInventoryAction,
-  addProductFilamentRequirementAction,
   deleteProductAction,
   deleteProductImageAction,
-  guessProductFilamentRequirementsAction,
   importBambuBuddyProductDataAction,
-  removeProductFilamentRequirementAction,
   refreshProductFromUrlAction,
   setProductStatusAction,
   setPrimaryImageAction,
@@ -36,6 +32,7 @@ import { getManagedCreators } from "@/server/services/creator-service";
 import { getAdminProducts, getProductByIdForAdmin } from "@/server/services/product-service";
 import { getSettings } from "@/server/services/settings-service";
 import { getPricingTiers } from "@/server/services/pricing-tier-service";
+import { getBambuBuddyFilamentMappings } from "@/server/services/bambuddy-filament-mapping-service";
 
 const productSortFields = ["product", "sku", "status", "visibility", "requestable", "tier", "estimatedCost", "inventory", "updated"] as const;
 type ProductSortField = (typeof productSortFields)[number];
@@ -64,15 +61,12 @@ export default async function ProductDetailAdminPage({
   const listPricingTierParam = listParams.get("pricingTier")?.trim() ?? "";
   const listSort = productSortFields.includes(listParams.get("sort") as ProductSortField) ? listParams.get("sort") as ProductSortField : null;
   const listDirection = listParams.get("direction") === "desc" ? "desc" : "asc";
-  const [filaments, creators, settings, pricingTiers, allProducts] = await Promise.all([
-    prisma.filament.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
+  const [creators, settings, pricingTiers, allProducts, bambuBuddyMappings] = await Promise.all([
     getManagedCreators(),
     getSettings(),
     getPricingTiers(),
     getAdminProducts(listSearch || undefined),
+    getBambuBuddyFilamentMappings(),
   ]);
 
   const selectedListCreator = creators.find((creator) => creator.id === listCreatorId);
@@ -98,7 +92,7 @@ export default async function ProductDetailAdminPage({
           case "visibility": return Number(candidate.isPublic);
           case "requestable": return Number(candidate.isRequestable);
           case "tier": return candidate.pricingTier?.label ?? "";
-          case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: candidate }).calculatedCost ?? -1;
+          case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...candidate, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }).calculatedCost ?? -1;
           case "inventory": return candidate.inventoryRecord?.available ?? -1;
           case "updated": return candidate.updatedAt.getTime();
         }
@@ -128,9 +122,10 @@ export default async function ProductDetailAdminPage({
     ?.replace("Imported URL: ", "")
     .trim();
   const sourceUrl = product.importSourceUrl || sourceUrlFromNotes || "";
-  const filamentRequirements = [...product.filamentRequirements].sort((a, b) =>
-    a.filament.name.localeCompare(b.filament.name),
-  );
+  const bambuBuddyMappingNames = new Map(bambuBuddyMappings.map((mapping) => [
+    `${mapping.materialType}:${mapping.hexColor}`,
+    `${mapping.colorName}${mapping.effectType ? ` (${mapping.effectType})` : ""}`,
+  ]));
   const inventoryRecord = product.inventoryRecord;
   const onHand = inventoryRecord?.onHand ?? 0;
   const available = inventoryRecord?.available ?? 0;
@@ -420,88 +415,16 @@ export default async function ProductDetailAdminPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Filament Requirements</CardTitle>
-              <CardDescription>Plan filament demand for this product.</CardDescription>
+              <CardTitle>BambuBuddy Filament Requirements</CardTitle>
+              <CardDescription>Updated from the linked BambuBuddy file. Matching colors are grouped by material type and hex value.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <form action={guessProductFilamentRequirementsAction} className="flex justify-end">
-                <input type="hidden" name="productId" value={product.id} />
-                <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
-                <Button type="submit" variant="secondary" size="sm">
-                  Guess From Description
-                </Button>
-              </form>
-
-              <form action={addProductFilamentRequirementAction} className="grid gap-2 sm:grid-cols-3">
-                <input type="hidden" name="productId" value={product.id} />
-                <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
-                <Select name="filamentId" defaultValue="" required>
-                  <option value="" disabled>
-                    Select filament
-                  </option>
-                  {filaments.map((filament) => (
-                    <option key={filament.id} value={filament.id}>
-                      {filament.name} ({filament.colorLabel})
-                    </option>
-                  ))}
-                </Select>
-                <input
-                  className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
-                  type="number"
-                  name="estimatedGramsPerPrint"
-                  step="0.01"
-                  placeholder="Estimated grams"
-                />
-                <Button type="submit" variant="secondary">
-                  Add / Update
-                </Button>
-              </form>
-
-              {filamentRequirements.length === 0 ? (
-                <p className="text-sm text-slate-500">No filament requirements assigned yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {filamentRequirements.map((requirement) => (
-                    <div key={requirement.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                      <div>
-                        <p className="font-medium text-slate-900">{requirement.filament.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {requirement.estimatedGramsPerPrint
-                            ? `${requirement.estimatedGramsPerPrint.toString()}g per print`
-                            : "No gram estimate"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <form action={addProductFilamentRequirementAction} className="flex items-center gap-2">
-                          <input type="hidden" name="productId" value={product.id} />
-                          <input type="hidden" name="filamentId" value={requirement.filamentId} />
-                          <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
-                          <Input
-                            className="w-36"
-                            type="number"
-                            name="estimatedGramsPerPrint"
-                            step="0.01"
-                            min={0}
-                            defaultValue={requirement.estimatedGramsPerPrint?.toString() ?? ""}
-                            placeholder="Grams / print"
-                          />
-                          <Button size="sm" variant="secondary" type="submit">
-                            Save
-                          </Button>
-                        </form>
-                        <form action={removeProductFilamentRequirementAction}>
-                          <input type="hidden" name="productId" value={product.id} />
-                          <input type="hidden" name="requirementId" value={requirement.id} />
-                          <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
-                          <Button size="sm" variant="ghost" type="submit">
-                            Remove
-                          </Button>
-                        </form>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {product.bambuBuddyFilamentRequirements.length === 0 ? <p className="text-sm text-slate-500">Import the linked BambuBuddy file to populate requirements.</p> : <div className="space-y-2">
+                {product.bambuBuddyFilamentRequirements.map((requirement) => <div key={requirement.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  <div className="flex min-w-0 items-center gap-2"><span className="h-4 w-4 shrink-0 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: requirement.hexColor }} title={requirement.hexColor} /><p className="min-w-0 font-medium text-slate-900">{bambuBuddyMappingNames.get(`${requirement.materialType}:${requirement.hexColor}`) ?? `${requirement.materialType} ${requirement.hexColor}`} <span className="font-mono text-xs text-slate-500">{requirement.hexColor}</span></p></div>
+                  <p className="text-slate-600">{requirement.estimatedGramsPerPrint.toString()} g per print</p>
+                </div>)}
+              </div>}
             </CardContent>
           </Card>
         </div>

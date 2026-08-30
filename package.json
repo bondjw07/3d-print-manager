@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "images:repair-missing": "tsx scripts/repair-missing-product-images.ts",
+    "bambuddy:cleanup-legacy-filament": "tsx scripts/bambuddy-cleanup-legacy-filament.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",

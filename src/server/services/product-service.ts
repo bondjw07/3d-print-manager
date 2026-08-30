@@ -231,6 +231,7 @@ export async function getAdminProducts(search?: string) {
       inventoryRecord: true,
       pricingTier: true,
       filamentRequirements: { include: { filament: true } },
+      bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -285,6 +286,7 @@ export async function getProductByIdForAdmin(id: string) {
         include: { filament: true },
         orderBy: { sortOrder: "asc" },
       },
+      bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
       _count: {
         select: {
           requests: true,
@@ -491,15 +493,24 @@ export async function updateBambuBuddyProductData(input: {
   fileId: string;
   printTimeSeconds?: number;
   filamentUsedGrams?: number;
+  filamentRequirements: Array<{ materialType: string; hexColor: string; estimatedGramsPerPrint: number }>;
 }) {
-  return prisma.product.update({
-    where: { id: input.productId },
-    data: {
-      bambuBuddyFileId: input.fileId,
-      bambuBuddyPrintTimeSeconds: input.printTimeSeconds,
-      bambuBuddyFilamentUsedGrams: input.filamentUsedGrams,
-      bambuBuddyLastSyncedAt: new Date(),
-    },
+  return prisma.$transaction(async (transaction) => {
+    await transaction.productBambuBuddyFilamentRequirement.deleteMany({ where: { productId: input.productId } });
+    if (input.filamentRequirements.length > 0) {
+      await transaction.productBambuBuddyFilamentRequirement.createMany({
+        data: input.filamentRequirements.map((requirement, sortOrder) => ({ ...requirement, productId: input.productId, sortOrder })),
+      });
+    }
+    return transaction.product.update({
+      where: { id: input.productId },
+      data: {
+        bambuBuddyFileId: input.fileId,
+        bambuBuddyPrintTimeSeconds: input.printTimeSeconds,
+        bambuBuddyFilamentUsedGrams: input.filamentUsedGrams,
+        bambuBuddyLastSyncedAt: new Date(),
+      },
+    });
   });
 }
 

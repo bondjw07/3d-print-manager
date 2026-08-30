@@ -61,7 +61,7 @@ export default async function AdminListingsPage({
       altText: image.altText,
       isPrimary: image.isPrimary,
     })),
-    suggestedCost: calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }).calculatedCost,
+    suggestedCost: calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }).calculatedCost,
     suggestedPrice: product.pricingTier?.suggestedPrice.toString() ?? "",
     defaultCategoryTag: getShopifyCategoryTagForProductCategory(product.category, shopifyCategoryMappings),
   }));

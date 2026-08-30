@@ -9,6 +9,7 @@ import {
   normalizeScalePercent,
 } from "@/lib/request-scale";
 import { recalculateInventoryAvailable } from "./inventory-service";
+import { getSettings } from "./settings-service";
 
 const ADMIN_MODEL_SCALE_MIN_PERCENT = 10;
 const ADMIN_MODEL_SCALE_MAX_PERCENT = 400;
@@ -191,7 +192,7 @@ export async function getRequestSummariesForUserByProductIds(userId: string, pro
 }
 
 export async function getAllRequests() {
-  const requests = await prisma.request.findMany({
+  const [requests, settings] = await Promise.all([prisma.request.findMany({
     include: {
       requesterUser: true,
       product: {
@@ -225,15 +226,16 @@ export async function getAllRequests() {
             },
             orderBy: { sortOrder: "asc" },
           },
+          bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
         },
       },
     },
     orderBy: { createdAt: "desc" },
-  });
+  }), getSettings()]);
 
   return requests.map((request) => ({
     ...request,
-    ...calculateRequestEstimate(request),
+    ...calculateRequestEstimate({ ...request, product: { ...request.product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }),
   }));
 }
 
@@ -394,7 +396,7 @@ export async function getFilamentRequestPurchaseDashboard(): Promise<FilamentReq
 }
 
 export async function getRequestByIdForAdmin(requestId: string) {
-  const request = await prisma.request.findUnique({
+  const [request, settings] = await Promise.all([prisma.request.findUnique({
     where: { id: requestId },
     include: {
       requesterUser: true,
@@ -417,13 +419,14 @@ export async function getRequestByIdForAdmin(requestId: string) {
             },
             orderBy: { sortOrder: "asc" },
           },
+          bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
         },
       },
       queueItems: {
         orderBy: { createdAt: "desc" },
       },
     },
-  });
+  }), getSettings()]);
 
   if (!request) {
     return null;
@@ -431,7 +434,7 @@ export async function getRequestByIdForAdmin(requestId: string) {
 
   return {
     ...request,
-    ...calculateRequestEstimate(request),
+    ...calculateRequestEstimate({ ...request, product: { ...request.product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }),
   };
 }
 

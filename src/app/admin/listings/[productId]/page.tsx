@@ -17,6 +17,7 @@ import { createListingAction, runListingActionAction, updateListingAction } from
 import { getProductByIdForAdmin } from "@/server/services/product-service";
 import { getShopifyOnlineStoreUrl, refreshShopifyListingFromRemote } from "@/server/services/shopify-auth-service";
 import { getShopifyCategoryTagForProductCategory, getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
+import { getSettings } from "@/server/services/settings-service";
 
 export default async function ProductListingWorkspace({
   params,
@@ -28,7 +29,7 @@ export default async function ProductListingWorkspace({
   const [{ productId }, query] = await Promise.all([params, searchParams]);
   let product = await getProductByIdForAdmin(productId);
   if (!product) notFound();
-  const shopifyCategoryMappings = await getShopifyCategoryTagMappings();
+  const [shopifyCategoryMappings, settings] = await Promise.all([getShopifyCategoryTagMappings(), getSettings()]);
   const shopifyListingIds = product.listings.filter((listing) => listing.marketplaceType === "SHOPIFY" && listing.externalListingId).map((listing) => listing.id);
   if (shopifyListingIds.length > 0) {
     await Promise.all(shopifyListingIds.map(refreshShopifyListingFromRemote));
@@ -36,7 +37,7 @@ export default async function ProductListingWorkspace({
     if (!product) notFound();
   }
   const redirectTo = `/admin/listings/${product.id}`;
-  const printEstimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product });
+  const printEstimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } });
   const publicUrls = new Map(
     await Promise.all(
       product.listings.map(async (listing) => {

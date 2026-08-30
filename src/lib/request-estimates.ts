@@ -12,6 +12,8 @@ export type RequestEstimateInput = {
   product: {
     itemWeightGrams?: unknown;
     filamentRequirements?: RequestFilamentRequirementEstimateInput[] | null;
+    bambuBuddyFilamentRequirements?: Array<{ materialType?: unknown; hexColor?: unknown; estimatedGramsPerPrint?: unknown }> | null;
+    defaultFilamentSpoolCost?: unknown;
   };
 };
 
@@ -81,7 +83,17 @@ function resolveFilamentName(requirement: RequestFilamentRequirementEstimateInpu
 export function calculateRequestFilamentWeightBreakdown(input: RequestEstimateInput): RequestFilamentWeightBreakdown {
   const quantity = Math.max(0, toFiniteNumber(input.quantity) ?? 0);
   const filamentScaleMultiplier = Math.max(0, (toFiniteNumber(input.filamentScalePercent) ?? 100) / 100);
+  const bambuRequirements = input.product.bambuBuddyFilamentRequirements ?? [];
   const requirements = input.product.filamentRequirements ?? [];
+  if (bambuRequirements.length > 0) {
+    const entries = bambuRequirements.map((requirement, index) => ({
+      filamentName: `${typeof requirement.materialType === "string" ? requirement.materialType : "Filament"} ${typeof requirement.hexColor === "string" ? requirement.hexColor : index + 1}`,
+      totalWeightGrams: roundToTwo(Math.max(0, toFiniteNumber(requirement.estimatedGramsPerPrint) ?? 0) * quantity * filamentScaleMultiplier),
+    })).filter((entry) => entry.totalWeightGrams > 0);
+    return entries.length > 0
+      ? { totalWeightGrams: roundToTwo(entries.reduce((sum, entry) => sum + entry.totalWeightGrams, 0)), entries, detail: "BambuBuddy per-filament estimate." }
+      : { totalWeightGrams: null, entries: [], detail: "BambuBuddy requirements are missing grams." };
+  }
   const filamentTotals = new Map<string, number>();
   let missingEstimateCount = 0;
 
@@ -152,10 +164,22 @@ export function calculateRequestEstimate(input: RequestEstimateInput): RequestEs
   const quantity = Math.max(0, toFiniteNumber(input.quantity) ?? 0);
   const filamentScaleMultiplier = Math.max(0, (toFiniteNumber(input.filamentScalePercent) ?? 100) / 100);
   const requirements = input.product.filamentRequirements ?? [];
+  const bambuRequirements = input.product.bambuBuddyFilamentRequirements ?? [];
   const weightBreakdown = calculateRequestFilamentWeightBreakdown(input);
 
   let calculatedCost = 0;
   let hasCostEstimate = false;
+
+  if (bambuRequirements.length > 0) {
+    const defaultSpoolCost = toFiniteNumber(input.product.defaultFilamentSpoolCost);
+    const grams = weightBreakdown.totalWeightGrams;
+    return {
+      totalWeightGrams: grams,
+      calculatedCost: defaultSpoolCost !== null && defaultSpoolCost >= 0 && grams !== null
+        ? roundToTwo(grams * (defaultSpoolCost / 1000))
+        : null,
+    };
+  }
 
   for (const requirement of requirements) {
     const estimatedGrams = toFiniteNumber(requirement.estimatedGramsPerPrint);

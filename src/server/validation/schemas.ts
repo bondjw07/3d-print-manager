@@ -433,6 +433,19 @@ export const bambuBuddyApiKeySchema = z.object({
   bambuBuddyApiKey: z.string().trim().min(1, "BambuBuddy API key is required.").max(512),
 });
 
+export const bambuBuddyFilamentMappingSchema = z.object({
+  materialType: z.string().trim().min(1, "Material type is required.").max(80),
+  hexColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #A1B2C3."),
+  colorName: z.string().trim().min(1, "Display name is required.").max(160),
+  manufacturer: z.string().trim().max(160).optional(),
+  materialName: z.string().trim().max(160).optional(),
+  effectType: z.string().trim().max(160).optional(),
+});
+
+export const defaultFilamentSpoolCostSchema = z.object({
+  defaultFilamentSpoolCost: z.coerce.number().min(0).max(1000),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

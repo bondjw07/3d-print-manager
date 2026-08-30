@@ -35,7 +35,7 @@ import { getProductExternalUrl } from "@/lib/product-external-url";
 import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getQueueItems } from "@/server/services/queue-service";
-import { getProcessingEstimateSettings } from "@/server/services/settings-service";
+import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 type AdminQueueItem = Awaited<ReturnType<typeof getQueueItems>>[number];
@@ -105,6 +105,9 @@ function stockAlertBadgeClassName(state: QueueFilamentStockState) {
 }
 
 function getQueueFilamentStockAlert(item: AdminQueueItem): QueueFilamentStockAlert {
+  if (item.product.bambuBuddyFilamentRequirements.length > 0) {
+    return { state: "UNKNOWN", missingTotalGrams: null, detail: "Filament stock is managed in BambuBuddy.", detailLines: [] };
+  }
   const requirements = item.product.filamentRequirements;
 
   if (requirements.length === 0) {
@@ -260,7 +263,7 @@ export default async function AdminQueuePage({
       ? (params.priority as QueuePriority)
       : undefined;
 
-  const [queueItems, products, users, processingSettings] = await Promise.all([
+  const [queueItems, products, users, processingSettings, settings] = await Promise.all([
     getQueueItems({ status: statusFilter, sourceType: sourceFilter, priority: priorityFilter }),
     prisma.product.findMany({ where: { status: "ACTIVE" }, orderBy: { publicName: "asc" }, select: { id: true, publicName: true } }),
     prisma.user.findMany({
@@ -269,12 +272,13 @@ export default async function AdminQueuePage({
       select: { id: true, name: true },
     }),
     getProcessingEstimateSettings(),
+    getSettings(),
   ]);
   const queueRows = queueItems.map((item) => {
     const weightBreakdown = calculateRequestFilamentWeightBreakdown({
       quantity: item.quantity,
       filamentScalePercent: item.filamentScalePercent,
-      product: item.product,
+      product: { ...item.product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost },
     });
     const timeEstimate = estimateWorkItemTime({
       totalWeightGrams: weightBreakdown.totalWeightGrams,

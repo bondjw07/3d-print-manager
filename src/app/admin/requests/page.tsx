@@ -29,7 +29,7 @@ import {
 } from "@/lib/domain";
 import { bulkManageRequestsAction } from "@/server/actions/portal-actions";
 import { getAllRequests } from "@/server/services/request-service";
-import { getProcessingEstimateSettings } from "@/server/services/settings-service";
+import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
 
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 const stockFilterOptions = ["all", "printable", "needs_stock", "unknown"] as const;
@@ -181,6 +181,9 @@ function stageBadgeClassName(stageKey: RequestStageKey) {
 }
 
 function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
+  if (request.product.bambuBuddyFilamentRequirements.length > 0) {
+    return { state: "UNKNOWN", requiredTotalGrams: null, missingTotalGrams: null, detail: "Filament stock is managed in BambuBuddy.", detailLines: [] };
+  }
   const requirements = request.product.filamentRequirements;
   if (requirements.length === 0) {
     return {
@@ -273,10 +276,11 @@ export default async function AdminRequestsPage({
     creator?: string | string[];
   }>;
 }) {
-  const [params, requests, processingSettings] = await Promise.all([
+  const [params, requests, processingSettings, settings] = await Promise.all([
     searchParams,
     getAllRequests(),
     getProcessingEstimateSettings(),
+    getSettings(),
   ]);
 
   const creatorOptions = Array.from(
@@ -299,7 +303,7 @@ export default async function AdminRequestsPage({
     weightBreakdown: calculateRequestFilamentWeightBreakdown({
       quantity: request.quantity,
       filamentScalePercent: request.filamentScalePercent,
-      product: request.product,
+      product: { ...request.product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost },
     }),
     timeEstimate: estimateWorkItemTime({
       totalWeightGrams: request.totalWeightGrams,

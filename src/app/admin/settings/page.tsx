@@ -33,6 +33,9 @@ import {
   updatePublicAppUrlAction,
   updateBambuBuddyBaseUrlAction,
   saveBambuBuddyApiKeyAction,
+  importBambuBuddyFilamentMappingsAction,
+  saveBambuBuddyFilamentMappingAction,
+  updateDefaultFilamentSpoolCostAction,
   updateProductCategoriesAction,
   updatePricingTierAction,
   updateSettingsAction,
@@ -46,13 +49,14 @@ import { getPricingTiers } from "@/server/services/pricing-tier-service";
 import { getShopifyCategoryTagMappings } from "@/server/services/shopify-category-tag-mapping-service";
 import { getBuildVersion } from "@/lib/build-info";
 import { getLatestSourceMigration } from "@/server/services/source-migration-service";
+import { getBambuBuddyFilamentMappings } from "@/server/services/bambuddy-filament-mapping-service";
 
 export default async function AdminSettingsPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration, bambuBuddyMappings] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
@@ -62,6 +66,7 @@ export default async function AdminSettingsPage({
     getPricingTiers(),
     getShopifyCategoryTagMappings(),
     getLatestSourceMigration(),
+    getBambuBuddyFilamentMappings(),
   ]);
   const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
   const tabClass = (name: string) => `rounded-t-xl px-4 py-2 text-sm font-medium ${tab === name ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`;
@@ -122,6 +127,30 @@ export default async function AdminSettingsPage({
               <p className="text-xs text-slate-500">Stored encrypted and sent as the <code>X-API-Key</code> header when importing file data. {settings.bambuBuddyApiKeyEncrypted ? "An API key is configured." : "No API key is configured."}</p>
               <Button type="submit" className="w-fit">Save API Key</Button>
             </form>
+            <form action={updateDefaultFilamentSpoolCostAction} className="grid gap-3 border-t border-slate-200 pt-5">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Default 1 kg spool cost<Input name="defaultFilamentSpoolCost" type="number" min="0" step="0.01" defaultValue={settings.defaultFilamentSpoolCost.toString()} required /></label>
+              <p className="text-xs text-slate-500">Used to estimate material cost for products with BambuBuddy requirements. Legacy filament costs remain only as a fallback for products that have not been imported.</p>
+              <Button type="submit" className="w-fit">Save Default Spool Cost</Button>
+            </form>
+            <form action={importBambuBuddyFilamentMappingsAction} className="grid gap-3 border-t border-slate-200 pt-5" encType="multipart/form-data">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Import color mappings CSV<Input name="mappingFile" type="file" accept="text/csv,.csv,application/json,.json" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy material type (optional)<Input name="materialType" placeholder="PLA" /></label>
+              <p className="text-xs text-slate-500">Use CSV columns Type, Sub Type, Color Name, and Hex Color. Rows are upserted by BambuBuddy material type and hex color; subtype is retained as descriptive metadata.</p>
+              <Button type="submit" className="w-fit" variant="secondary">Import Mappings</Button>
+            </form>
+            <form action={saveBambuBuddyFilamentMappingAction} className="grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Material type<Input name="materialType" placeholder="PLA" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Hex color<Input name="hexColor" placeholder="#A1B2C3" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Display/color name<Input name="colorName" placeholder="Forest Green" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Manufacturer (optional)<Input name="manufacturer" /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Source material (optional)<Input name="materialName" /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Material subtype / finish (optional)<Input name="effectType" placeholder="Matte" /></label>
+              <div className="md:col-span-2"><Button type="submit" variant="secondary">Save Mapping</Button></div>
+            </form>
+            {bambuBuddyMappings.length > 0 ? <div className="border-t border-slate-200 pt-5 text-sm"><p className="mb-2 font-medium text-slate-800">Saved mappings ({bambuBuddyMappings.length})</p><div className="max-h-48 space-y-1 overflow-y-auto">{bambuBuddyMappings.map((mapping) => <p key={mapping.id} className="rounded bg-slate-50 px-2 py-1"><span className="font-medium">{mapping.materialType} {mapping.hexColor}</span> — {mapping.colorName}{mapping.effectType ? ` (${mapping.effectType})` : ""}</p>)}</div></div> : null}
           </div>
         </CardContent>
       </Card>
@@ -665,21 +694,21 @@ export default async function AdminSettingsPage({
           </div>
 
           <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <p className="text-sm font-semibold text-rose-800">Delete All Filaments</p>
+            <p className="text-sm font-semibold text-rose-800">Delete Legacy Local Filaments</p>
             <p className="mt-1 text-sm text-slate-600">
-              Permanently deletes all filaments and removes linked product filament requirements. This action cannot be undone.
+              Permanently deletes legacy local-filament data and linked legacy product requirements. BambuBuddy mappings and requirements are not affected. This action cannot be undone.
             </p>
             <form action={deleteAllFilamentsAction} className="mt-3">
               <input type="hidden" name="redirectTo" value="/admin/settings" />
               <ConfirmSubmitModalButton
                 variant="danger"
-                confirmTitle="Delete All Filaments?"
-                confirmMessage="This will permanently delete every filament and remove all linked product filament requirements. This cannot be undone."
-                confirmLabel="Yes, Delete Filaments"
+                confirmTitle="Delete Legacy Local Filaments?"
+                confirmMessage="This will permanently delete every legacy local filament and its linked legacy product requirements. BambuBuddy data is not affected. This cannot be undone."
+                confirmLabel="Yes, Delete Legacy Filaments"
                 confirmationKeyword="delete"
                 confirmationInputName="confirmWord"
               >
-                Delete All Filaments
+                Delete Legacy Local Filaments
               </ConfirmSubmitModalButton>
             </form>
           </div>
