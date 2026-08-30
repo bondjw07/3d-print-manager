@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ProductPhotoCarousel } from "@/components/admin/product-photo-carousel";
 import { ProductForm } from "@/components/forms/product-form";
@@ -13,8 +14,9 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TableContainer } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/utils";
-import { humanizeEnum } from "@/lib/domain";
+import { humanizeEnum, productStatusOptions } from "@/lib/domain";
 import { DEFAULT_SCALE_PERCENT } from "@/lib/request-scale";
+import { calculateRequestEstimate } from "@/lib/request-estimates";
 import { prisma } from "@/lib/prisma";
 import {
   addProductInventoryAction,
@@ -30,16 +32,19 @@ import {
   updateProductAction,
 } from "@/server/actions/portal-actions";
 import { getManagedCreators } from "@/server/services/creator-service";
-import { getProductByIdForAdmin } from "@/server/services/product-service";
+import { getAdminProducts, getProductByIdForAdmin } from "@/server/services/product-service";
 import { getSettings } from "@/server/services/settings-service";
 import { getPricingTiers } from "@/server/services/pricing-tier-service";
+
+const productSortFields = ["product", "sku", "status", "visibility", "requestable", "tier", "estimatedCost", "inventory", "updated"] as const;
+type ProductSortField = (typeof productSortFields)[number];
 
 export default async function ProductDetailAdminPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; list?: string }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const product = await getProductByIdForAdmin(id);
@@ -48,7 +53,17 @@ export default async function ProductDetailAdminPage({
     notFound();
   }
 
-  const [filaments, creators, settings, pricingTiers] = await Promise.all([
+  const listParams = new URLSearchParams(query.list ?? "");
+  const listSearch = listParams.get("q")?.trim() ?? "";
+  const listCategory = listParams.get("category") === "__NONE__" ? "__NONE__" : listParams.get("category")?.trim() ?? "";
+  const listStatusValue = listParams.get("status");
+  const listStatus = productStatusOptions.includes(listStatusValue as (typeof productStatusOptions)[number]) ? listStatusValue! : "";
+  const listVisibility = listParams.get("visibility") === "public" || listParams.get("visibility") === "private" ? listParams.get("visibility")! : "";
+  const listCreatorId = listParams.get("creator")?.trim() ?? "";
+  const listPricingTierParam = listParams.get("pricingTier")?.trim() ?? "";
+  const listSort = productSortFields.includes(listParams.get("sort") as ProductSortField) ? listParams.get("sort") as ProductSortField : null;
+  const listDirection = listParams.get("direction") === "desc" ? "desc" : "asc";
+  const [filaments, creators, settings, pricingTiers, allProducts] = await Promise.all([
     prisma.filament.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -56,7 +71,49 @@ export default async function ProductDetailAdminPage({
     getManagedCreators(),
     getSettings(),
     getPricingTiers(),
+    getAdminProducts(listSearch || undefined),
   ]);
+
+  const selectedListCreator = creators.find((creator) => creator.id === listCreatorId);
+  const listPricingTier = listPricingTierParam === "__NONE__" || pricingTiers.some((tier) => tier.id === listPricingTierParam) ? listPricingTierParam : "";
+  const orderedProducts = allProducts
+    .filter((candidate) => {
+      const hasManagedCategory = settings.productCategories.includes(candidate.category);
+      const matchesCategory = !listCategory || (listCategory === "__NONE__" ? !candidate.category.trim() || !hasManagedCategory : candidate.category === listCategory);
+      const matchesCreator = !selectedListCreator || candidate.importSourceCreatorName?.trim().toLowerCase() === selectedListCreator.name.trim().toLowerCase();
+      const matchesPricingTier = !listPricingTier || (listPricingTier === "__NONE__" ? !candidate.pricingTierId : candidate.pricingTierId === listPricingTier);
+      return matchesCategory && matchesCreator && matchesPricingTier && (!listStatus || candidate.status === listStatus) && (!listVisibility || candidate.isPublic === (listVisibility === "public"));
+    })
+    .sort((left, right) => {
+      if (!listSort) {
+        return 0;
+      }
+
+      const valueFor = (candidate: typeof allProducts[number]) => {
+        switch (listSort) {
+          case "product": return candidate.publicName;
+          case "sku": return candidate.sku;
+          case "status": return candidate.status;
+          case "visibility": return Number(candidate.isPublic);
+          case "requestable": return Number(candidate.isRequestable);
+          case "tier": return candidate.pricingTier?.label ?? "";
+          case "estimatedCost": return calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: candidate }).calculatedCost ?? -1;
+          case "inventory": return candidate.inventoryRecord?.available ?? -1;
+          case "updated": return candidate.updatedAt.getTime();
+        }
+      };
+      const leftValue = valueFor(left);
+      const rightValue = valueFor(right);
+      const comparison = typeof leftValue === "string" && typeof rightValue === "string"
+        ? leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: "base" })
+        : Number(leftValue) - Number(rightValue);
+      return listDirection === "desc" ? -comparison : comparison;
+    });
+  const currentProductIndex = orderedProducts.findIndex((candidate) => candidate.id === product.id);
+  const previousProduct = currentProductIndex > 0 ? orderedProducts[currentProductIndex - 1] : null;
+  const nextProduct = currentProductIndex >= 0 && currentProductIndex < orderedProducts.length - 1 ? orderedProducts[currentProductIndex + 1] : null;
+  const detailHref = (productId: string) => `/admin/products/${productId}?${new URLSearchParams({ list: query.list ?? "" })}`;
+  const detailRedirectTo = query.list ? detailHref(product.id) : `/admin/products/${product.id}`;
 
   const normalizedProductCreatorName = product.importSourceCreatorName?.trim().toLowerCase();
   const currentManagedCreatorId =
@@ -92,9 +149,18 @@ export default async function ProductDetailAdminPage({
   return (
     <div className="space-y-4">
       <PageHeader>
-        <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Product Detail</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{product.publicName}</h1>
-        <p className="mt-1 text-sm text-slate-600">SKU: {product.sku}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Product Detail</p>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900">{product.publicName}</h1>
+            <p className="mt-1 text-sm text-slate-600">SKU: {product.sku}</p>
+          </div>
+          {query.list && currentProductIndex >= 0 ? <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span className="hidden sm:inline">{currentProductIndex + 1} of {orderedProducts.length}</span>
+            {previousProduct ? <Link href={detailHref(previousProduct.id)} className="rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-100" aria-label="Previous product" title="Previous product"><ArrowLeft className="h-4 w-4" aria-hidden /></Link> : <span className="rounded-lg border border-slate-200 p-2 text-slate-300" aria-hidden><ArrowLeft className="h-4 w-4" /></span>}
+            {nextProduct ? <Link href={detailHref(nextProduct.id)} className="rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-100" aria-label="Next product" title="Next product"><ArrowRight className="h-4 w-4" aria-hidden /></Link> : <span className="rounded-lg border border-slate-200 p-2 text-slate-300" aria-hidden><ArrowRight className="h-4 w-4" /></span>}
+          </div> : null}
+        </div>
       </PageHeader>
 
       {query.error ? (
@@ -118,7 +184,7 @@ export default async function ProductDetailAdminPage({
               pricingTiers={pricingTiers}
               currentManagedCreatorId={currentManagedCreatorId}
               action={updateProductAction}
-              redirectTo={`/admin/products/${product.id}`}
+              redirectTo={detailRedirectTo}
               submitLabel="Save Product"
             />
           </CardContent>

@@ -40,17 +40,11 @@ export function ProductForm({
       {product ? <input type="hidden" name="productId" value={product.id} /> : null}
       <input type="hidden" name="redirectTo" value={redirectTo} />
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="internalName">
-          Internal name
+      <div className="sm:col-span-2">
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="name">
+          Name
         </label>
-        <Input id="internalName" name="internalName" required defaultValue={product?.internalName ?? ""} />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="publicName">
-          Public name
-        </label>
-        <Input id="publicName" name="publicName" required defaultValue={product?.publicName ?? ""} />
+        <Input id="name" name="name" required defaultValue={product?.publicName ?? product?.internalName ?? ""} />
       </div>
 
       <div className="sm:col-span-2">

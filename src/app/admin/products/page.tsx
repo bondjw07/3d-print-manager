@@ -28,7 +28,7 @@ type ProductSortField = (typeof productSortFields)[number];
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; creator?: string; sort?: string; direction?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; creator?: string; pricingTier?: string; sort?: string; direction?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "bulk" || params.view === "imports" ? params.view : "catalog";
@@ -37,18 +37,25 @@ export default async function AdminProductsPage({
   const status = productStatusOptions.includes(params.status as (typeof productStatusOptions)[number]) ? params.status! : "";
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
   const creatorId = params.creator?.trim() ?? "";
+  const pricingTierParam = params.pricingTier?.trim() ?? "";
   const sort = productSortFields.includes(params.sort as ProductSortField) ? params.sort as ProductSortField : null;
   const direction = params.direction === "desc" ? "desc" : "asc";
   const [allProducts, creators, settings, pricingTiers] = await Promise.all([getAdminProducts(q || undefined), getManagedCreators(), getSettings(), getPricingTiers()]);
   const selectedCreator = creators.find((creator) => creator.id === creatorId);
-  const activeFilterCount = [category, status, visibility, selectedCreator].filter(Boolean).length;
-  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(sort ? { sort, direction } : {}) });
+  const pricingTier = pricingTierParam === "__NONE__" || pricingTiers.some((tier) => tier.id === pricingTierParam) ? pricingTierParam : "";
+  const pricingTiersByCategory = pricingTiers.reduce<Record<string, typeof pricingTiers>>((tiersByCategory, tier) => {
+    (tiersByCategory[tier.category] ??= []).push(tier);
+    return tiersByCategory;
+  }, {});
+  const activeFilterCount = [category, status, visibility, selectedCreator, pricingTier].filter(Boolean).length;
+  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), ...(sort ? { sort, direction } : {}) });
   const redirectTo = `/admin/products?${redirectQuery}`;
   const filteredProducts = allProducts.filter((product) => {
     const hasManagedCategory = settings.productCategories.includes(product.category);
     const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() || !hasManagedCategory : product.category === category);
     const matchesCreator = !selectedCreator || product.importSourceCreatorName?.trim().toLowerCase() === selectedCreator.name.trim().toLowerCase();
-    return matchesCategory && matchesCreator && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
+    const matchesPricingTier = !pricingTier || (pricingTier === "__NONE__" ? !product.pricingTierId : product.pricingTierId === pricingTier);
+    return matchesCategory && matchesCreator && matchesPricingTier && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
   });
   const products = [...filteredProducts].sort((left, right) => {
     if (!sort) {
@@ -78,10 +85,12 @@ export default async function AdminProductsPage({
   });
   const sortHref = (field: ProductSortField) => {
     const nextDirection = sort === field && direction === "asc" ? "desc" : "asc";
-    const query = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), sort: field, direction: nextDirection });
+    const query = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), sort: field, direction: nextDirection });
     return `/admin/products?${query}`;
   };
   const clearFiltersHref = `/admin/products?${new URLSearchParams({ view, ...(q ? { q } : {}), ...(sort ? { sort, direction } : {}) })}`;
+  const productListQuery = redirectQuery.toString();
+  const productDetailHref = (productId: string) => `/admin/products/${productId}?${new URLSearchParams({ list: productListQuery })}`;
   const sortableHeader = (label: string, field: ProductSortField) => {
     const isSorted = sort === field;
     const SortIcon = isSorted && direction === "desc" ? ArrowDown : ArrowUp;
@@ -166,6 +175,14 @@ export default async function AdminProductsPage({
                     <Select name="creator" defaultValue={selectedCreator?.id ?? ""}>
                       <option value="">All creators</option>
                       {creators.map((creator) => <option key={creator.id} value={creator.id}>{creator.name}</option>)}
+                    </Select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Price tier
+                    <Select name="pricingTier" defaultValue={pricingTier}>
+                      <option value="">All price tiers</option>
+                      <option value="__NONE__">No price tier</option>
+                      {Object.entries(pricingTiersByCategory).map(([tierCategory, tiers]) => <optgroup key={tierCategory} label={tierCategory}>{tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.label}</option>)}</optgroup>)}
                     </Select>
                   </label>
                   <div className="flex items-end justify-end gap-2">
@@ -314,7 +331,7 @@ export default async function AdminProductsPage({
                       />
                     </td> : null}
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3">
                         {product.images[0] ? (
                           <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                             <Image
@@ -332,39 +349,39 @@ export default async function AdminProductsPage({
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link className="block px-2 py-3" href={`/admin/products/${product.id}`}>
+                      <Link className="block px-2 py-3" href={productDetailHref(product.id)}>
                         <p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span><HoverInfo content={<><p className="font-semibold text-slate-900">Category</p><p className="mt-0.5 text-slate-600">{product.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-600" aria-label={`Category: ${product.category}`}><Folder className="h-3 w-3" aria-hidden /></span></HoverInfo>{product.pricingTier ? <HoverInfo content={<><p className="font-semibold text-slate-900">{product.pricingTier.label}</p><p className="mt-0.5 text-slate-600">Suggested listing price: {formatCurrency(Number(product.pricingTier.suggestedPrice))}</p><p className="mt-0.5 text-slate-500">{product.pricingTier.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700" aria-label={`Pricing tier: ${product.pricingTier.label}`}><DollarSign className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-sm text-slate-600">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">
                         {product.sku}
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3">
                         <StatusBadge value={product.status} />
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-sm text-slate-700">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-700">
                         {product.isPublic ? "Public" : "Private"}
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-sm text-slate-700">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-700">
                         {product.isRequestable ? "Yes" : "No"}
                       </Link>
                     </td>
-                    {view === "bulk" ? <><td className="px-0 py-0"><Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-xs text-slate-600">{product.pricingTier?.label ?? "No tier"}</Link></td><td className="px-0 py-0"><Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-xs text-slate-600">{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }); return estimate.calculatedCost === null ? "—" : formatCurrency(estimate.calculatedCost); })()}</Link></td></> : null}
+                    {view === "bulk" ? <><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{product.pricingTier?.label ?? "No tier"}</Link></td><td className="px-0 py-0"><Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-600">{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product }); return estimate.calculatedCost === null ? "—" : formatCurrency(estimate.calculatedCost); })()}</Link></td></> : null}
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-sm text-slate-600">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">
                         {product.inventoryRecord ? `${product.inventoryRecord.available} available` : "No record"}
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={`/admin/products/${product.id}`} className="block px-2 py-3 text-xs text-slate-500">
+                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-xs text-slate-500">
                         {formatDateTime(product.updatedAt)}
                       </Link>
                     </td>

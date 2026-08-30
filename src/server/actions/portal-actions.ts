@@ -152,6 +152,8 @@ export async function createProductAction(formData: FormData) {
 
   const product = await createProduct({
     ...parsed.data,
+    internalName: parsed.data.name,
+    publicName: parsed.data.name,
     shortDescription: parsed.data.fullDescription.slice(0, 180),
   });
   revalidatePath("/admin/products");
@@ -327,6 +329,8 @@ export async function updateProductAction(formData: FormData) {
 
   await updateProduct(productId, {
     ...parsed.data,
+    internalName: parsed.data.name,
+    publicName: parsed.data.name,
     shortDescription: parsed.data.fullDescription.slice(0, 180),
   });
   revalidatePath("/admin/products");

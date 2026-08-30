@@ -101,8 +101,7 @@ const optionalFilamentScalePercent = z.preprocess(
 );
 
 export const productFormSchema = z.object({
-  internalName: z.string().trim().min(2),
-  publicName: z.string().trim().min(2),
+  name: z.string().trim().min(2),
   fullDescription: z.string().trim().min(10),
   category: z.string().trim().min(2),
   pricingTierId: pricingTierSelection,
