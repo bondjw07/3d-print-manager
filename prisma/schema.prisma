@@ -467,6 +467,7 @@ model AppSetting {
   shopifyShopName                    String?
   publicAppUrl                       String?
   bambuBuddyBaseUrl                  String?
+  bambuBuddyApiKeyEncrypted          String?
   productCategories                  String[]        @default([])
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt

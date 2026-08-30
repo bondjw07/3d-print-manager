@@ -32,6 +32,7 @@ import {
   setSourceMigrationRowTargetAction,
   updatePublicAppUrlAction,
   updateBambuBuddyBaseUrlAction,
+  saveBambuBuddyApiKeyAction,
   updateProductCategoriesAction,
   updatePricingTierAction,
   updateSettingsAction,
@@ -108,12 +109,20 @@ export default async function AdminSettingsPage({
           <CardDescription>Set the base URL used to import file details into products.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={updateBambuBuddyBaseUrlAction} className="grid max-w-xl gap-3">
-            <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
-            <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy URL<Input name="bambuBuddyBaseUrl" type="url" defaultValue={settings.bambuBuddyBaseUrl ?? ""} placeholder="http://bambuddy.local" required /></label>
-            <p className="text-xs text-slate-500">Use the address reachable by this app&apos;s server, without the API path.</p>
-            <Button type="submit" className="w-fit">Save BambuBuddy URL</Button>
-          </form>
+          <div className="grid max-w-xl gap-5">
+            <form action={updateBambuBuddyBaseUrlAction} className="grid gap-3">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy URL<Input name="bambuBuddyBaseUrl" type="url" defaultValue={settings.bambuBuddyBaseUrl ?? ""} placeholder="http://bambuddy.local" required /></label>
+              <p className="text-xs text-slate-500">Use the address reachable by this app&apos;s server, without the API path.</p>
+              <Button type="submit" className="w-fit">Save BambuBuddy URL</Button>
+            </form>
+            <form action={saveBambuBuddyApiKeyAction} className="grid gap-3 border-t border-slate-200 pt-5">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <label className="grid gap-1 text-sm font-medium text-slate-800">API key<Input name="bambuBuddyApiKey" type="password" placeholder={settings.bambuBuddyApiKeyEncrypted ? "Configured — enter a new key to replace it" : "BambuBuddy API key"} autoComplete="new-password" required /></label>
+              <p className="text-xs text-slate-500">Stored encrypted and sent as the <code>X-API-Key</code> header when importing file data. {settings.bambuBuddyApiKeyEncrypted ? "An API key is configured." : "No API key is configured."}</p>
+              <Button type="submit" className="w-fit">Save API Key</Button>
+            </form>
+          </div>
         </CardContent>
       </Card>
 

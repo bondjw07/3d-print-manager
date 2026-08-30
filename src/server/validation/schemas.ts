@@ -429,6 +429,10 @@ export const bambuBuddyBaseUrlSchema = z.object({
     .transform((value) => value.replace(/\/+$/, "")),
 });
 
+export const bambuBuddyApiKeySchema = z.object({
+  bambuBuddyApiKey: z.string().trim().min(1, "BambuBuddy API key is required.").max(512),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

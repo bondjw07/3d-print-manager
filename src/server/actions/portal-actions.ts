@@ -77,6 +77,7 @@ import {
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
+import { getBambuBuddyApiKey, saveBambuBuddyApiKey } from "@/server/services/bambuddy-auth-service";
 import { applySourceMigrationRows, buildThangsCreatorMigrationFromCsv, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
 import { importEnrichedThangsProductsFromCsv, importMissingThangsProductsFromCsv } from "@/server/services/thangs-csv-import-service";
 import {
@@ -102,6 +103,7 @@ import {
   productCategoriesSchema,
   publicAppUrlSchema,
   bambuBuddyBaseUrlSchema,
+  bambuBuddyApiKeySchema,
   queueCreateSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
@@ -241,6 +243,7 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") ?? `/admin/products/${productId}`);
   const settings = await getSettings();
   const bambuBuddyBaseUrl = settings.bambuBuddyBaseUrl ?? process.env.BAMBUDDY_BASE_URL?.trim().replace(/\/+$/, "");
+  const bambuBuddyApiKey = await getBambuBuddyApiKey();
 
   if (!productId || !fileId) {
     redirect(appendStatus(redirectTo, "error", "A BambuBuddy file ID is required."));
@@ -251,7 +254,7 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
 
   try {
     const response = await fetch(`${bambuBuddyBaseUrl}/api/v1/library/files/${encodeURIComponent(fileId)}`, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...(bambuBuddyApiKey ? { "X-API-Key": bambuBuddyApiKey } : {}) },
       cache: "no-store",
     });
     if (!response.ok) {
@@ -1413,6 +1416,16 @@ export async function updateBambuBuddyBaseUrlAction(formData: FormData) {
   await updateBambuBuddyBaseUrl(parsed.data.bambuBuddyBaseUrl);
   revalidatePath("/admin/settings");
   redirect(appendStatus(redirectTo, "success", "BambuBuddy URL saved."));
+}
+
+export async function saveBambuBuddyApiKeyAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = bambuBuddyApiKeySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await saveBambuBuddyApiKey(parsed.data.bambuBuddyApiKey);
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "BambuBuddy API key saved."));
 }
 
 export async function updateProcessingEstimateSettingsAction(formData: FormData) {
