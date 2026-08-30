@@ -40,6 +40,11 @@ export function ProductForm({
       {product ? <input type="hidden" name="productId" value={product.id} /> : null}
       <input type="hidden" name="redirectTo" value={redirectTo} />
 
+      <section className="grid gap-4 rounded-xl border border-slate-200 bg-surface-muted p-4 sm:col-span-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h2 className="font-semibold text-slate-900">Catalog details</h2>
+          <p className="text-sm text-slate-500">Core information used to identify and describe this product.</p>
+        </div>
       <div className="sm:col-span-2">
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="name">
           Name
@@ -84,7 +89,13 @@ export function ProductForm({
         </Select>
         <p className="mt-1 text-xs text-slate-500">Managed in Admin Settings.</p>
       </div>
+      </section>
 
+      <section className="grid gap-4 rounded-xl border border-slate-200 bg-surface-muted p-4 sm:col-span-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h2 className="font-semibold text-slate-900">Availability</h2>
+          <p className="text-sm text-slate-500">Control where the product can appear and how it can be requested.</p>
+        </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="sku">
           SKU
@@ -116,7 +127,40 @@ export function ProductForm({
           ))}
         </Select>
       </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isPublic">
+          Public visibility
+        </label>
+        <Select id="isPublic" name="isPublic" defaultValue={String(product?.isPublic ?? false)}>
+          <option value="true">Public</option>
+          <option value="false">Private</option>
+        </Select>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isRequestable">
+          Requestable
+        </label>
+        <Select id="isRequestable" name="isRequestable" defaultValue={String(product?.isRequestable ?? false)}>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </Select>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isListable">
+          Listable
+        </label>
+        <Select id="isListable" name="isListable" defaultValue={String(product?.isListable ?? false)}>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </Select>
+      </div>
+      </section>
 
+      <section className="grid gap-4 rounded-xl border border-slate-200 bg-surface-muted p-4 sm:col-span-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h2 className="font-semibold text-slate-900">Print specifications</h2>
+          <p className="text-sm text-slate-500">Physical measurements, packaging, and the linked BambuBuddy print file.</p>
+        </div>
       <div className="grid grid-cols-3 gap-2 sm:col-span-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-700" htmlFor="lengthMm">
@@ -156,7 +200,19 @@ export function ProductForm({
         </label>
         <Input id="packagingType" name="packagingType" defaultValue={product?.packagingType ?? ""} />
       </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="bambuBuddyFileId">
+          BambuBuddy file ID
+        </label>
+        <Input id="bambuBuddyFileId" name="bambuBuddyFileId" defaultValue={product?.bambuBuddyFileId ?? ""} />
+      </div>
+      </section>
 
+      <section className="grid gap-4 rounded-xl border border-slate-200 bg-surface-muted p-4 sm:col-span-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h2 className="font-semibold text-slate-900">Notes</h2>
+          <p className="text-sm text-slate-500">Keep internal production and print instructions together.</p>
+        </div>
       <div className="sm:col-span-2">
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="productionNotes">
           Production notes
@@ -169,40 +225,10 @@ export function ProductForm({
         </label>
         <Textarea id="printNotes" name="printNotes" defaultValue={product?.printNotes ?? ""} />
       </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isPublic">
-          Public visibility
-        </label>
-        <Select id="isPublic" name="isPublic" defaultValue={String(product?.isPublic ?? false)}>
-          <option value="true">Public</option>
-          <option value="false">Private</option>
-        </Select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isRequestable">
-          Requestable
-        </label>
-        <Select id="isRequestable" name="isRequestable" defaultValue={String(product?.isRequestable ?? false)}>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </Select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="isListable">
-          Listable
-        </label>
-        <Select id="isListable" name="isListable" defaultValue={String(product?.isListable ?? false)}>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </Select>
-      </div>
-
       <div className="sm:col-span-2">
         <Button type="submit">{submitLabel}</Button>
       </div>
+      </section>
     </form>
   );
 }

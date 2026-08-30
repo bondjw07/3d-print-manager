@@ -328,6 +328,7 @@ export async function createProduct(data: {
   heightMm?: number;
   itemWeightGrams?: number;
   packagingType?: string;
+  bambuBuddyFileId?: string;
   productionNotes?: string;
   printNotes?: string;
   importSource?: ProductImportSource;
@@ -372,6 +373,7 @@ export async function createProduct(data: {
     heightMm: data.heightMm,
     itemWeightGrams: data.itemWeightGrams,
     packagingType: data.packagingType,
+    bambuBuddyFileId: data.bambuBuddyFileId?.trim() || undefined,
     productionNotes: data.productionNotes,
     printNotes: data.printNotes,
     inventoryRecord: {
@@ -430,6 +432,7 @@ export async function updateProduct(
     heightMm?: number;
     itemWeightGrams?: number;
     packagingType?: string;
+    bambuBuddyFileId?: string;
     productionNotes?: string;
     printNotes?: string;
     creatorId?: string | null;
@@ -475,6 +478,7 @@ export async function updateProduct(
       heightMm: data.heightMm,
       itemWeightGrams: data.itemWeightGrams,
       packagingType: data.packagingType,
+      bambuBuddyFileId: data.bambuBuddyFileId?.trim() || null,
       productionNotes: data.productionNotes,
       printNotes: data.printNotes,
       ...creatorUpdate,

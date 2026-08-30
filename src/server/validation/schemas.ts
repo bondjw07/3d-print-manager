@@ -118,6 +118,7 @@ export const productFormSchema = z.object({
   heightMm: optionalNumber,
   itemWeightGrams: optionalNumber,
   packagingType: z.string().trim().optional(),
+  bambuBuddyFileId: z.string().trim().max(120).optional(),
   productionNotes: z.string().trim().optional(),
   printNotes: z.string().trim().optional(),
 });

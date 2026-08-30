@@ -158,6 +158,7 @@ model Product {
   heightMm         Decimal?      @db.Decimal(8, 2)
   itemWeightGrams  Decimal?      @db.Decimal(8, 2)
   packagingType    String?
+  bambuBuddyFileId String?
   productionNotes  String?
   printNotes       String?
   importSource              ProductImportSource?
