@@ -313,6 +313,20 @@ export const queueUpdateSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const queueBulkActionSchema = z.object({
+  queueItemIds: z.array(z.string().trim().min(1)).min(1, "Select at least one queue item."),
+  operation: z.enum(["UPDATE", "DELETE"]),
+  status: z.nativeEnum(QueueStatus).optional(),
+}).superRefine((value, context) => {
+  if (value.operation === "UPDATE" && !value.status) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["status"],
+      message: "Select a status for bulk updates.",
+    });
+  }
+});
+
 export const userAdminUpdateSchema = z.object({
   role: z.nativeEnum(UserRole),
   isActive: boolLike,

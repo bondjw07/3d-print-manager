@@ -146,6 +146,43 @@ export async function updateQueueItem(
   });
 }
 
+export async function bulkUpdateQueueItemStatus(input: {
+  queueItemIds: string[];
+  status: QueueStatus;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const queueItems = await tx.queueItem.findMany({
+      where: { id: { in: input.queueItemIds } },
+      select: { id: true, sourceRequestId: true },
+    });
+
+    await tx.queueItem.updateMany({
+      where: { id: { in: queueItems.map((item) => item.id) } },
+      data: { status: input.status },
+    });
+
+    const sourceRequestIds = queueItems.flatMap((item) => item.sourceRequestId ? [item.sourceRequestId] : []);
+    if (sourceRequestIds.length > 0 && input.status === QueueStatus.COMPLETED) {
+      await tx.request.updateMany({
+        where: { id: { in: sourceRequestIds } },
+        data: { status: RequestStatus.COMPLETED },
+      });
+    } else if (sourceRequestIds.length > 0 && input.status === QueueStatus.CANCELLED) {
+      await tx.request.updateMany({
+        where: { id: { in: sourceRequestIds } },
+        data: { status: RequestStatus.CANCELLED },
+      });
+    }
+
+    return { updatedCount: queueItems.length, notFoundCount: input.queueItemIds.length - queueItems.length };
+  });
+}
+
+export async function bulkDeleteQueueItems(queueItemIds: string[]) {
+  const result = await prisma.queueItem.deleteMany({ where: { id: { in: queueItemIds } } });
+  return { deletedCount: result.count, notFoundCount: queueItemIds.length - result.count };
+}
+
 export async function getQueueStatusCounts() {
   const counts = await prisma.queueItem.groupBy({
     by: ["status"],

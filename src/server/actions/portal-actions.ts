@@ -32,7 +32,12 @@ import {
 } from "@/server/services/creator-service";
 import { simulateMarketplaceEvent } from "@/server/services/marketplace-event-service";
 import { addInventoryStock, updateInventory } from "@/server/services/inventory-service";
-import { createQueueItem, updateQueueItem } from "@/server/services/queue-service";
+import {
+  bulkDeleteQueueItems,
+  bulkUpdateQueueItemStatus,
+  createQueueItem,
+  updateQueueItem,
+} from "@/server/services/queue-service";
 import {
   bulkConvertRequestsToQueue,
   bulkDeleteRequestsByAdmin,
@@ -109,6 +114,7 @@ import {
   bambuBuddyFilamentMappingSchema,
   defaultFilamentSpoolCostSchema,
   queueCreateSchema,
+  queueBulkActionSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
   requestBulkActionSchema,
@@ -1369,6 +1375,51 @@ export async function updateQueueItemAction(formData: FormData) {
     revalidatePath("/my-requests");
   }
   redirect(appendStatus(redirectTo, "success", "Queue item updated."));
+}
+
+export async function bulkManageQueueAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/queue");
+  const parsed = queueBulkActionSchema.safeParse({
+    queueItemIds: formData.getAll("queueItemIds").map((value) => String(value)),
+    operation: formData.get("operation"),
+    status: formData.get("status") || undefined,
+  });
+
+  if (!parsed.success) {
+    redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  }
+
+  const queueItemIds = [...new Set(parsed.data.queueItemIds)];
+
+  if (parsed.data.operation === "UPDATE") {
+    const result = await bulkUpdateQueueItemStatus({
+      queueItemIds,
+      status: parsed.data.status!,
+    });
+    revalidatePath("/admin/queue");
+    revalidatePath("/admin/requests");
+    revalidatePath("/requests");
+    revalidatePath("/my-requests");
+    redirect(appendStatus(
+      redirectTo,
+      result.notFoundCount > 0 ? "error" : "success",
+      `${result.updatedCount} queue item${result.updatedCount === 1 ? "" : "s"} updated.${
+        result.notFoundCount > 0 ? ` ${result.notFoundCount} not found.` : ""
+      }`,
+    ));
+  }
+
+  const result = await bulkDeleteQueueItems(queueItemIds);
+  revalidatePath("/admin/queue");
+  redirect(appendStatus(
+    redirectTo,
+    result.notFoundCount > 0 ? "error" : "success",
+    `${result.deletedCount} queue item${result.deletedCount === 1 ? "" : "s"} deleted.${
+      result.notFoundCount > 0 ? ` ${result.notFoundCount} not found.` : ""
+    }`,
+  ));
 }
 
 export async function updateInventoryAction(formData: FormData) {

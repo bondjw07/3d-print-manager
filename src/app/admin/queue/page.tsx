@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HoverInfo } from "@/components/ui/hover-info";
 import { Select } from "@/components/ui/select";
+import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
 import {
   type QueuePriority,
@@ -36,6 +37,7 @@ import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getQueueItems } from "@/server/services/queue-service";
 import { getProcessingEstimateSettings, getSettings } from "@/server/services/settings-service";
+import { bulkManageQueueAction } from "@/server/actions/portal-actions";
 
 const FULL_FILAMENT_ROLL_GRAMS = 1000;
 type AdminQueueItem = Awaited<ReturnType<typeof getQueueItems>>[number];
@@ -454,6 +456,39 @@ export default async function AdminQueuePage({
         </CardContent>
       </Card>
 
+      <form
+        id="bulk-queue-management-form"
+        action={bulkManageQueueAction}
+        className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_220px_220px_auto]"
+      >
+        <input type="hidden" name="redirectTo" value={redirectTo} />
+        <p className="flex items-center text-sm text-slate-700">
+          Bulk manage selected queue items: update their status or delete them from the queue.
+        </p>
+        <Select name="operation" defaultValue="UPDATE">
+          <option value="UPDATE">Update status</option>
+          <option value="DELETE">Delete from queue</option>
+        </Select>
+        <Select name="status" defaultValue="PENDING">
+          {queueStatusOptions.map((status) => (
+            <option key={status} value={status}>
+              {humanizeEnum(status)}
+            </option>
+          ))}
+        </Select>
+        <Button type="submit">Apply to Selected</Button>
+      </form>
+
+      <div className="flex items-center gap-2 text-xs text-slate-600">
+        <SelectAllFormCheckbox
+          formId="bulk-queue-management-form"
+          inputName="queueItemIds"
+          totalCount={visibleRows.length}
+          ariaLabel="Select all filtered queue items"
+        />
+        <span>Select all filtered queue items</span>
+      </div>
+
       {queueStageDefinitions.map((stage) => {
         const stageRows = visibleRows.filter((row) => row.stageKey === stage.key);
         const stageTotalUnits = stageRows.reduce((sum, row) => sum + row.item.quantity, 0);
@@ -510,6 +545,7 @@ export default async function AdminQueuePage({
                     <Table>
                       <thead>
                         <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                          <th className="px-2 py-2">Select</th>
                           <th className="px-2 py-2">Thumb</th>
                           <th className="px-2 py-2">Product</th>
                           <th className="px-2 py-2">Source</th>
@@ -531,6 +567,16 @@ export default async function AdminQueuePage({
                               key={item.id}
                               className={`border-b border-slate-100 align-top transition-colors hover:bg-slate-50 focus-within:bg-slate-50 ${priorityRowClassName(item.priority)}`}
                             >
+                              <td className="px-2 py-3">
+                                <input
+                                  type="checkbox"
+                                  name="queueItemIds"
+                                  value={item.id}
+                                  form="bulk-queue-management-form"
+                                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                  aria-label={`Select queue item for ${item.product.publicName}`}
+                                />
+                              </td>
                               <td className="p-0">
                                 <Link href={detailHref} className={rowLinkClassName}>
                                   {item.product.images[0] ? (
