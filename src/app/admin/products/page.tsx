@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, DollarSign, Folder, SlidersHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, DollarSign, Folder, Paperclip, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,10 +25,17 @@ import {
 const productSortFields = ["product", "sku", "status", "visibility", "requestable", "tier", "estimatedCost", "inventory", "updated"] as const;
 type ProductSortField = (typeof productSortFields)[number];
 
+function formatPrintDuration(totalSeconds: number | null) {
+  if (totalSeconds === null || totalSeconds < 0) return "Not provided";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.round((totalSeconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; creator?: string; pricingTier?: string; sort?: string; direction?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string; status?: string; visibility?: string; bambuBuddy?: string; creator?: string; pricingTier?: string; sort?: string; direction?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "bulk" || params.view === "imports" ? params.view : "catalog";
@@ -36,6 +43,7 @@ export default async function AdminProductsPage({
   const category = params.category === "__NONE__" ? "__NONE__" : params.category?.trim() ?? "";
   const status = productStatusOptions.includes(params.status as (typeof productStatusOptions)[number]) ? params.status! : "";
   const visibility = params.visibility === "public" || params.visibility === "private" ? params.visibility : "";
+  const bambuBuddy = params.bambuBuddy === "linked" || params.bambuBuddy === "unlinked" ? params.bambuBuddy : "";
   const creatorId = params.creator?.trim() ?? "";
   const pricingTierParam = params.pricingTier?.trim() ?? "";
   const sort = productSortFields.includes(params.sort as ProductSortField) ? params.sort as ProductSortField : null;
@@ -47,15 +55,17 @@ export default async function AdminProductsPage({
     (tiersByCategory[tier.category] ??= []).push(tier);
     return tiersByCategory;
   }, {});
-  const activeFilterCount = [category, status, visibility, selectedCreator, pricingTier].filter(Boolean).length;
-  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), ...(sort ? { sort, direction } : {}) });
+  const activeFilterCount = [category, status, visibility, bambuBuddy, selectedCreator, pricingTier].filter(Boolean).length;
+  const redirectQuery = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(bambuBuddy ? { bambuBuddy } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), ...(sort ? { sort, direction } : {}) });
   const redirectTo = `/admin/products?${redirectQuery}`;
   const filteredProducts = allProducts.filter((product) => {
     const hasManagedCategory = settings.productCategories.includes(product.category);
     const matchesCategory = !category || (category === "__NONE__" ? !product.category.trim() || !hasManagedCategory : product.category === category);
     const matchesCreator = !selectedCreator || product.importSourceCreatorName?.trim().toLowerCase() === selectedCreator.name.trim().toLowerCase();
     const matchesPricingTier = !pricingTier || (pricingTier === "__NONE__" ? !product.pricingTierId : product.pricingTierId === pricingTier);
-    return matchesCategory && matchesCreator && matchesPricingTier && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
+    const isBambuBuddyLinked = Boolean(product.bambuBuddyFileId?.trim());
+    const matchesBambuBuddy = !bambuBuddy || isBambuBuddyLinked === (bambuBuddy === "linked");
+    return matchesCategory && matchesCreator && matchesPricingTier && matchesBambuBuddy && (!status || product.status === status) && (!visibility || product.isPublic === (visibility === "public"));
   });
   const products = [...filteredProducts].sort((left, right) => {
     if (!sort) {
@@ -85,7 +95,7 @@ export default async function AdminProductsPage({
   });
   const sortHref = (field: ProductSortField) => {
     const nextDirection = sort === field && direction === "asc" ? "desc" : "asc";
-    const query = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), sort: field, direction: nextDirection });
+    const query = new URLSearchParams({ view, ...(q ? { q } : {}), ...(category ? { category } : {}), ...(status ? { status } : {}), ...(visibility ? { visibility } : {}), ...(bambuBuddy ? { bambuBuddy } : {}), ...(selectedCreator ? { creator: selectedCreator.id } : {}), ...(pricingTier ? { pricingTier } : {}), sort: field, direction: nextDirection });
     return `/admin/products?${query}`;
   };
   const clearFiltersHref = `/admin/products?${new URLSearchParams({ view, ...(q ? { q } : {}), ...(sort ? { sort, direction } : {}) })}`;
@@ -168,6 +178,14 @@ export default async function AdminProductsPage({
                       <option value="">All visibility</option>
                       <option value="public">Public</option>
                       <option value="private">Private</option>
+                    </Select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    BambuBuddy file
+                    <Select name="bambuBuddy" defaultValue={bambuBuddy}>
+                      <option value="">All products</option>
+                      <option value="linked">Linked</option>
+                      <option value="unlinked">Not linked</option>
                     </Select>
                   </label>
                   <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -350,7 +368,7 @@ export default async function AdminProductsPage({
                     </td>
                     <td className="px-0 py-0">
                       <Link className="block px-2 py-3" href={productDetailHref(product.id)}>
-                        <p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>
+                        <div className="flex items-center gap-1.5"><p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>{product.bambuBuddyFileId?.trim() ? <HoverInfo content={<><p className="font-semibold text-slate-900">BambuBuddy file linked</p><dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600"><dt>Print time</dt><dd>{formatPrintDuration(product.bambuBuddyPrintTimeSeconds)}</dd><dt>Filament</dt><dd>{product.bambuBuddyFilamentUsedGrams === null ? "Not provided" : `${product.bambuBuddyFilamentUsedGrams.toString()} g`}</dd><dt>Est. cost</dt><dd>{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }); return estimate.calculatedCost === null ? "Not available" : formatCurrency(estimate.calculatedCost); })()}</dd></dl></>}><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-600" aria-label="BambuBuddy file linked"><Paperclip className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span><HoverInfo content={<><p className="font-semibold text-slate-900">Category</p><p className="mt-0.5 text-slate-600">{product.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-600" aria-label={`Category: ${product.category}`}><Folder className="h-3 w-3" aria-hidden /></span></HoverInfo>{product.pricingTier ? <HoverInfo content={<><p className="font-semibold text-slate-900">{product.pricingTier.label}</p><p className="mt-0.5 text-slate-600">Suggested listing price: {formatCurrency(Number(product.pricingTier.suggestedPrice))}</p><p className="mt-0.5 text-slate-500">{product.pricingTier.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700" aria-label={`Pricing tier: ${product.pricingTier.label}`}><DollarSign className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
                       </Link>
                     </td>
