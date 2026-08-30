@@ -24,6 +24,7 @@ import {
   deleteProductAction,
   deleteProductImageAction,
   guessProductFilamentRequirementsAction,
+  importBambuBuddyProductDataAction,
   removeProductFilamentRequirementAction,
   refreshProductFromUrlAction,
   setProductStatusAction,
@@ -184,6 +185,7 @@ export default async function ProductDetailAdminPage({
               pricingTiers={pricingTiers}
               currentManagedCreatorId={currentManagedCreatorId}
               action={updateProductAction}
+              bambuBuddyImportAction={importBambuBuddyProductDataAction}
               redirectTo={detailRedirectTo}
               submitLabel="Save Product"
             />

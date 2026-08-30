@@ -159,6 +159,9 @@ model Product {
   itemWeightGrams  Decimal?      @db.Decimal(8, 2)
   packagingType    String?
   bambuBuddyFileId String?
+  bambuBuddyPrintTimeSeconds Int?
+  bambuBuddyFilamentUsedGrams Decimal? @db.Decimal(10, 2)
+  bambuBuddyLastSyncedAt DateTime?
   productionNotes  String?
   printNotes       String?
   importSource              ProductImportSource?

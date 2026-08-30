@@ -486,6 +486,23 @@ export async function updateProduct(
   });
 }
 
+export async function updateBambuBuddyProductData(input: {
+  productId: string;
+  fileId: string;
+  printTimeSeconds?: number;
+  filamentUsedGrams?: number;
+}) {
+  return prisma.product.update({
+    where: { id: input.productId },
+    data: {
+      bambuBuddyFileId: input.fileId,
+      bambuBuddyPrintTimeSeconds: input.printTimeSeconds,
+      bambuBuddyFilamentUsedGrams: input.filamentUsedGrams,
+      bambuBuddyLastSyncedAt: new Date(),
+    },
+  });
+}
+
 export async function setProductStatus(productId: string, status: ProductStatus) {
   return prisma.product.update({ where: { id: productId }, data: { status } });
 }

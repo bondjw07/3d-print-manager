@@ -17,6 +17,7 @@ export function ProductForm({
   pricingTiers,
   currentManagedCreatorId,
   action,
+  bambuBuddyImportAction,
   redirectTo,
   submitLabel,
 }: {
@@ -26,6 +27,7 @@ export function ProductForm({
   pricingTiers: PricingTier[];
   currentManagedCreatorId?: string | null;
   action: (formData: FormData) => void | Promise<void>;
+  bambuBuddyImportAction?: (formData: FormData) => void | Promise<void>;
   redirectTo: string;
   submitLabel: string;
 }) {
@@ -204,7 +206,10 @@ export function ProductForm({
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="bambuBuddyFileId">
           BambuBuddy file ID
         </label>
-        <Input id="bambuBuddyFileId" name="bambuBuddyFileId" defaultValue={product?.bambuBuddyFileId ?? ""} />
+        <div className="flex gap-2">
+          <Input id="bambuBuddyFileId" name="bambuBuddyFileId" defaultValue={product?.bambuBuddyFileId ?? ""} />
+          {product && bambuBuddyImportAction ? <Button type="submit" formAction={bambuBuddyImportAction} variant="secondary" className="shrink-0">Import data</Button> : null}
+        </div>
       </div>
       </section>
 

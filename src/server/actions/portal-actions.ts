@@ -70,6 +70,7 @@ import {
   reorderFilamentRequirement,
   setPrimaryProductImage,
   setProductStatus,
+  updateBambuBuddyProductData,
   updateProduct,
 } from "@/server/services/product-service";
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
@@ -223,6 +224,51 @@ export async function refreshProductFromUrlAction(formData: FormData) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Refresh failed.";
     redirect(appendStatus(redirectTo, "error", message));
+  }
+}
+
+function finiteNonNegativeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+export async function importBambuBuddyProductDataAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const productId = String(formData.get("productId") ?? "").trim();
+  const fileId = String(formData.get("bambuBuddyFileId") ?? "").trim();
+  const redirectTo = String(formData.get("redirectTo") ?? `/admin/products/${productId}`);
+  const bambuBuddyBaseUrl = process.env.BAMBUDDY_BASE_URL?.trim().replace(/\/+$/, "");
+
+  if (!productId || !fileId) {
+    redirect(appendStatus(redirectTo, "error", "A BambuBuddy file ID is required."));
+  }
+  if (!bambuBuddyBaseUrl) {
+    redirect(appendStatus(redirectTo, "error", "Set BAMBUDDY_BASE_URL before importing BambuBuddy data."));
+  }
+
+  try {
+    const response = await fetch(`${bambuBuddyBaseUrl}/api/v1/library/files/${encodeURIComponent(fileId)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`BambuBuddy returned ${response.status}.`);
+    }
+
+    const payload = await response.json() as {
+      print_time_seconds?: unknown;
+      filament_used_grams?: unknown;
+      metadata?: { print_time_seconds?: unknown; filament_used_grams?: unknown };
+    };
+    const printTimeSeconds = finiteNonNegativeNumber(payload.metadata?.print_time_seconds ?? payload.print_time_seconds);
+    const filamentUsedGrams = finiteNonNegativeNumber(payload.metadata?.filament_used_grams ?? payload.filament_used_grams);
+
+    await updateBambuBuddyProductData({ productId, fileId, printTimeSeconds, filamentUsedGrams });
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${productId}`);
+    redirect(appendStatus(redirectTo, "success", "Imported BambuBuddy print time and filament usage."));
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "BambuBuddy import failed."));
   }
 }
 
