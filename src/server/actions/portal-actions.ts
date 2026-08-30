@@ -150,7 +150,10 @@ export async function createProductAction(formData: FormData) {
   try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
-  const product = await createProduct(parsed.data);
+  const product = await createProduct({
+    ...parsed.data,
+    shortDescription: parsed.data.fullDescription.slice(0, 180),
+  });
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
   redirect(appendStatus(`/admin/products/${product.id}`, "success", "Product created."));
@@ -322,7 +325,10 @@ export async function updateProductAction(formData: FormData) {
   try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
-  await updateProduct(productId, parsed.data);
+  await updateProduct(productId, {
+    ...parsed.data,
+    shortDescription: parsed.data.fullDescription.slice(0, 180),
+  });
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
   revalidatePath("/catalog");

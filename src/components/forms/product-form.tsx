@@ -54,13 +54,6 @@ export function ProductForm({
       </div>
 
       <div className="sm:col-span-2">
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="shortDescription">
-          Short description
-        </label>
-        <Input id="shortDescription" name="shortDescription" required defaultValue={product?.shortDescription ?? ""} />
-      </div>
-
-      <div className="sm:col-span-2">
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="fullDescription">
           Full description
         </label>
