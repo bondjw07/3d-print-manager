@@ -128,6 +128,18 @@ function firstIssueMessage(error: { issues?: { message: string }[] }) {
   return error.issues?.[0]?.message ?? "Invalid form input.";
 }
 
+function rethrowNextRedirect(error: unknown): void {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof error.digest === "string" &&
+    error.digest.startsWith("NEXT_REDIRECT")
+  ) {
+    throw error;
+  }
+}
+
 function appendStatus(path: string, key: "success" | "error", message: string) {
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}${key}=${encodeURIComponent(message)}`;
@@ -195,6 +207,7 @@ export async function importProductFromUrlAction(formData: FormData) {
       : `${humanizeEnum(result.source)} import completed with ${result.importedImageCount} image${result.importedImageCount === 1 ? "" : "s"}.${duplicateDetail}`;
     redirect(appendStatus(`/admin/products/${result.product.id}`, "success", message));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Import failed.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -226,6 +239,7 @@ export async function refreshProductFromUrlAction(formData: FormData) {
     const message = `Updated from ${humanizeEnum(result.source)}: ${result.importedImageCount} new image${result.importedImageCount === 1 ? "" : "s"} imported, ${result.skippedDuplicateImageCount} duplicate${result.skippedDuplicateImageCount === 1 ? "" : "s"} skipped.`;
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Refresh failed.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -252,6 +266,8 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
     redirect(appendStatus(redirectTo, "error", "Set the BambuBuddy URL in Admin Settings before importing data."));
   }
 
+  let printTimeSeconds: number | undefined;
+  let filamentUsedGrams: number | undefined;
   try {
     const response = await fetch(`${bambuBuddyBaseUrl}/api/v1/library/files/${encodeURIComponent(fileId)}`, {
       headers: { Accept: "application/json", ...(bambuBuddyApiKey ? { "X-API-Key": bambuBuddyApiKey } : {}) },
@@ -266,16 +282,18 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
       filament_used_grams?: unknown;
       metadata?: { print_time_seconds?: unknown; filament_used_grams?: unknown };
     };
-    const printTimeSeconds = finiteNonNegativeNumber(payload.metadata?.print_time_seconds ?? payload.print_time_seconds);
-    const filamentUsedGrams = finiteNonNegativeNumber(payload.metadata?.filament_used_grams ?? payload.filament_used_grams);
+    printTimeSeconds = finiteNonNegativeNumber(payload.metadata?.print_time_seconds ?? payload.print_time_seconds);
+    filamentUsedGrams = finiteNonNegativeNumber(payload.metadata?.filament_used_grams ?? payload.filament_used_grams);
 
     await updateBambuBuddyProductData({ productId, fileId, printTimeSeconds, filamentUsedGrams });
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${productId}`);
-    redirect(appendStatus(redirectTo, "success", "Imported BambuBuddy print time and filament usage."));
   } catch (error) {
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "BambuBuddy import failed."));
   }
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${productId}`);
+  const importedFields = [printTimeSeconds !== undefined ? "print time" : null, filamentUsedGrams !== undefined ? "filament usage" : null].filter(Boolean);
+  redirect(appendStatus(redirectTo, "success", importedFields.length > 0 ? `Imported BambuBuddy ${importedFields.join(" and ")}.` : "BambuBuddy file imported, but it did not include print time or filament usage."));
 }
 
 export async function bulkImportProductsFromUrlsAction(formData: FormData) {
@@ -421,6 +439,7 @@ export async function deleteProductAction(formData: FormData) {
         : "";
     redirect(appendStatus(redirectTo, "success", `Product deleted.${linkedCleanupDetail}`));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to delete product.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -481,6 +500,7 @@ export async function bulkUpdateProductControlsAction(formData: FormData) {
       pricingTierId: parsed.data.pricingTierId === "UNCHANGED" ? undefined : parsed.data.pricingTierId,
     });
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to bulk update products.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -640,6 +660,7 @@ export async function guessProductFilamentRequirementsAction(formData: FormData)
         : `Filament guess complete: ${result.matchedCount} matched, ${result.addedCount} added, ${result.alreadyAssignedCount} already assigned.`;
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to guess filament requirements.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -812,6 +833,7 @@ export async function deleteFilamentAction(formData: FormData) {
         : "";
     redirect(appendStatus(redirectTo, "success", `Filament deleted.${linkedCleanupDetail}`));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to delete filament.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -1531,6 +1553,7 @@ export async function scanThangsCreatorMigrationAction(formData: FormData) {
     revalidatePath("/admin/settings");
     redirect(appendStatus(redirectTo, "success", `Review built from ${result.sourceCatalogCount} Loot Lab and ${result.targetCatalogCount} Kit Kiln listings. Review the proposed mappings below.`));
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Migration scan failed."));
   }
 }
@@ -1550,6 +1573,7 @@ export async function importThangsCatalogCsvAction(formData: FormData) {
     revalidatePath("/catalog");
     redirect(appendStatus(redirectTo, "success", `Catalog import complete: ${result.created} draft product${result.created === 1 ? "" : "s"} created; ${result.skipped} existing product${result.skipped === 1 ? "" : "s"} skipped.`));
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Catalog CSV import failed."));
   }
 }
@@ -1566,6 +1590,7 @@ export async function importEnrichedThangsCsvAction(formData: FormData) {
     revalidatePath("/admin/products"); revalidatePath("/catalog");
     redirect(appendStatus(redirectTo, "success", `Enriched import complete: ${result.created} drafts created; ${result.skipped} existing products skipped.`));
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Enriched CSV import failed."));
   }
 }
@@ -1585,6 +1610,7 @@ export async function applySourceMigrationRowsAction(formData: FormData) {
     revalidatePath("/admin/products");
     redirect(appendStatus(redirectTo, "success", `Applied ${result.applied} mapping${result.applied === 1 ? "" : "s"}${result.conflicts ? `; ${result.conflicts} conflict${result.conflicts === 1 ? "" : "s"} need review.` : "."}`));
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to apply migration."));
   }
 }
@@ -1605,6 +1631,7 @@ export async function setSourceMigrationRowTargetAction(formData: FormData) {
     revalidatePath("/admin/settings");
     redirect(appendStatus(redirectTo, "success", "Manual target saved. Review it, then select it for application."));
   } catch (error) {
+    rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save target listing."));
   }
 }
@@ -1643,6 +1670,7 @@ export async function deleteAllProductsAction(formData: FormData) {
     const message = `Deleted ${deletedProductCount} product${deletedProductCount === 1 ? "" : "s"}, ${deletedQueueCount} queue item${deletedQueueCount === 1 ? "" : "s"}, and ${deletedRequestCount} request${deletedRequestCount === 1 ? "" : "s"}.`;
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to delete all products.";
     redirect(appendStatus(redirectTo, "error", message));
   }
@@ -1677,6 +1705,7 @@ export async function deleteAllFilamentsAction(formData: FormData) {
     const message = `Deleted ${deletedFilamentCount} filament${deletedFilamentCount === 1 ? "" : "s"} and removed ${removedRequirementCount} linked product requirement${removedRequirementCount === 1 ? "" : "s"}.`;
     redirect(appendStatus(redirectTo, "success", message));
   } catch (error) {
+    rethrowNextRedirect(error);
     const message = error instanceof Error ? error.message : "Unable to delete all filaments.";
     redirect(appendStatus(redirectTo, "error", message));
   }
