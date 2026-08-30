@@ -39,6 +39,14 @@ export async function updatePublicAppUrl(publicAppUrl: string) {
   });
 }
 
+export async function updateBambuBuddyBaseUrl(bambuBuddyBaseUrl: string) {
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: { id: "app", defaultMarketplace: "ETSY", bambuBuddyBaseUrl },
+    update: { bambuBuddyBaseUrl },
+  });
+}
+
 export async function updateProductCategories(productCategories: string[]) {
   return prisma.appSetting.upsert({
     where: { id: "app" },

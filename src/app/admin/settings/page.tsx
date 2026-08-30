@@ -31,6 +31,7 @@ import {
   importThangsCatalogCsvAction,
   setSourceMigrationRowTargetAction,
   updatePublicAppUrlAction,
+  updateBambuBuddyBaseUrlAction,
   updateProductCategoriesAction,
   updatePricingTierAction,
   updateSettingsAction,
@@ -97,6 +98,21 @@ export default async function AdminSettingsPage({
             <label className="grid gap-1 text-sm font-medium text-slate-800">Public HTTPS URL<Input name="publicAppUrl" type="url" defaultValue={settings.publicAppUrl ?? ""} placeholder="https://print.example.com" required /></label>
             <p className="text-xs text-slate-500">This domain must be publicly reachable over HTTPS so Shopify can download product images.</p>
             <Button type="submit" className="w-fit">Save Public URL</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className={tab === "integrations" ? "" : "hidden"}>
+        <CardHeader>
+          <CardTitle>BambuBuddy</CardTitle>
+          <CardDescription>Set the base URL used to import file details into products.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateBambuBuddyBaseUrlAction} className="grid max-w-xl gap-3">
+            <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+            <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy URL<Input name="bambuBuddyBaseUrl" type="url" defaultValue={settings.bambuBuddyBaseUrl ?? ""} placeholder="http://bambuddy.local" required /></label>
+            <p className="text-xs text-slate-500">Use the address reachable by this app&apos;s server, without the API path.</p>
+            <Button type="submit" className="w-fit">Save BambuBuddy URL</Button>
           </form>
         </CardContent>
       </Card>

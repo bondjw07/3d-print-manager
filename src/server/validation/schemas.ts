@@ -423,6 +423,12 @@ export const publicAppUrlSchema = z.object({
     .transform((value) => value.replace(/\/$/, "")),
 });
 
+export const bambuBuddyBaseUrlSchema = z.object({
+  bambuBuddyBaseUrl: z
+    .url("Enter a valid BambuBuddy URL.")
+    .transform((value) => value.replace(/\/+$/, "")),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

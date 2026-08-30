@@ -47,6 +47,7 @@ import {
   updateDefaultMarketplace,
   updateProductCategories,
   updatePublicAppUrl,
+  updateBambuBuddyBaseUrl,
   updateProcessingEstimateSettings,
   updateAppVersion,
   getSettings,
@@ -100,6 +101,7 @@ import {
   productFormSchema,
   productCategoriesSchema,
   publicAppUrlSchema,
+  bambuBuddyBaseUrlSchema,
   queueCreateSchema,
   queueUpdateSchema,
   requestAdminUpdateSchema,
@@ -237,13 +239,14 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
   const productId = String(formData.get("productId") ?? "").trim();
   const fileId = String(formData.get("bambuBuddyFileId") ?? "").trim();
   const redirectTo = String(formData.get("redirectTo") ?? `/admin/products/${productId}`);
-  const bambuBuddyBaseUrl = process.env.BAMBUDDY_BASE_URL?.trim().replace(/\/+$/, "");
+  const settings = await getSettings();
+  const bambuBuddyBaseUrl = settings.bambuBuddyBaseUrl ?? process.env.BAMBUDDY_BASE_URL?.trim().replace(/\/+$/, "");
 
   if (!productId || !fileId) {
     redirect(appendStatus(redirectTo, "error", "A BambuBuddy file ID is required."));
   }
   if (!bambuBuddyBaseUrl) {
-    redirect(appendStatus(redirectTo, "error", "Set BAMBUDDY_BASE_URL before importing BambuBuddy data."));
+    redirect(appendStatus(redirectTo, "error", "Set the BambuBuddy URL in Admin Settings before importing data."));
   }
 
   try {
@@ -1400,6 +1403,16 @@ export async function updatePublicAppUrlAction(formData: FormData) {
   await updatePublicAppUrl(parsed.data.publicAppUrl);
   revalidatePath("/admin/settings");
   redirect(appendStatus(redirectTo, "success", "Public app URL saved."));
+}
+
+export async function updateBambuBuddyBaseUrlAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = bambuBuddyBaseUrlSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await updateBambuBuddyBaseUrl(parsed.data.bambuBuddyBaseUrl);
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "BambuBuddy URL saved."));
 }
 
 export async function updateProcessingEstimateSettingsAction(formData: FormData) {
