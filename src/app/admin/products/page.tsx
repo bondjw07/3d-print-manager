@@ -59,7 +59,7 @@ export default async function AdminProductsPage({
   });
   const products = [...filteredProducts].sort((left, right) => {
     if (!sort) {
-      return 0;
+      return right.createdAt.getTime() - left.createdAt.getTime();
     }
 
     const valueFor = (product: typeof filteredProducts[number]) => {

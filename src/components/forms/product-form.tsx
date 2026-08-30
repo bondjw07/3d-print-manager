@@ -218,7 +218,7 @@ export function ProductForm({
           {product && bambuBuddyImportAction ? <Button type="submit" formAction={bambuBuddyImportAction} variant="secondary" className="shrink-0">Import data</Button> : null}
         </div>
       </div>
-      {product?.bambuBuddyLastSyncedAt ? <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-sm sm:col-span-2">
+      {product?.bambuBuddyLastSyncedAt ? <div className="rounded-lg border border-slate-200 bg-surface-muted p-3 text-sm sm:col-span-2">
         <p className="font-medium text-slate-800">Imported BambuBuddy data</p>
         <dl className="mt-2 grid gap-2 text-slate-600 sm:grid-cols-3">
           <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Print time</dt><dd>{product.bambuBuddyPrintTimeSeconds === null ? "Not provided" : formatPrintDuration(product.bambuBuddyPrintTimeSeconds)}</dd></div>

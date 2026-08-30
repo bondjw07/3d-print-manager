@@ -87,7 +87,7 @@ export default async function ProductDetailAdminPage({
     })
     .sort((left, right) => {
       if (!listSort) {
-        return 0;
+        return right.createdAt.getTime() - left.createdAt.getTime();
       }
 
       const valueFor = (candidate: typeof allProducts[number]) => {
@@ -395,7 +395,7 @@ export default async function ProductDetailAdminPage({
                           <form action={setPrimaryImageAction}>
                             <input type="hidden" name="productId" value={product.id} />
                             <input type="hidden" name="imageId" value={image.id} />
-                            <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
+                            <input type="hidden" name="redirectTo" value={detailRedirectTo} />
                             <Button size="sm" variant="secondary" type="submit">
                               Primary
                             </Button>
@@ -405,7 +405,7 @@ export default async function ProductDetailAdminPage({
                           <input type="hidden" name="productId" value={product.id} />
                           <input type="hidden" name="imageId" value={image.id} />
                           <input type="hidden" name="imagePath" value={image.imagePath} />
-                          <input type="hidden" name="redirectTo" value={`/admin/products/${product.id}`} />
+                          <input type="hidden" name="redirectTo" value={detailRedirectTo} />
                           <Button size="sm" variant="ghost" type="submit">
                             Delete
                           </Button>
