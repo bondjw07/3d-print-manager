@@ -3,17 +3,38 @@ set -eu
 
 FAILED_MIGRATION="20260830000005_add_product_file_workflow"
 MIGRATE_LOG="/tmp/pmp-migrate-deploy.log"
-PRIVATE_STORAGE_ROOT="${PMP_FILE_STORAGE_ROOT:-/app/private-uploads}"
-LEGACY_PRIVATE_STORAGE_ROOT="/app/private-uploads"
+PUBLIC_UPLOADS_MOUNT="/app/public/uploads"
+DEFAULT_PRIVATE_STORAGE_ROOT="$PUBLIC_UPLOADS_MOUNT/pmp-files"
+PRIVATE_STORAGE_ROOT="${PMP_FILE_STORAGE_ROOT:-$DEFAULT_PRIVATE_STORAGE_ROOT}"
+
+is_mounted() {
+  awk -v target="$1" '$5 == target { found = 1 } END { exit found ? 0 : 1 }' /proc/self/mountinfo
+}
 
 prepare_private_storage() {
-  # Unraid deployments deliberately use /data/pmp. Refuse to start if that
-  # path is not actually mounted, otherwise uploads would silently land in the
-  # disposable container filesystem again.
-  if [ "$PRIVATE_STORAGE_ROOT" = "/data/pmp" ] &&
-    ! awk '$5 == "/data/pmp" { found = 1 } END { exit found ? 0 : 1 }' /proc/self/mountinfo; then
-    echo "PMP private storage is not mounted at /data/pmp; refusing to start." >&2
-    echo "Deploy with docker-compose.unraid.yml or map a durable host path to /data/pmp." >&2
+  # Automatically retire the short-lived /data/pmp configuration when this
+  # package is updated on an installation that already has the durable public
+  # uploads mapping.
+  if [ "$PRIVATE_STORAGE_ROOT" = "/data/pmp" ] && ! is_mounted "/data/pmp" && is_mounted "$PUBLIC_UPLOADS_MOUNT"; then
+    echo "Using the existing uploads mount for PMP private storage."
+    PRIVATE_STORAGE_ROOT="$DEFAULT_PRIVATE_STORAGE_ROOT"
+    export PMP_FILE_STORAGE_ROOT="$PRIVATE_STORAGE_ROOT"
+  fi
+
+  case "$PRIVATE_STORAGE_ROOT" in
+    "$PUBLIC_UPLOADS_MOUNT"|"$PUBLIC_UPLOADS_MOUNT"/*)
+      REQUIRED_MOUNT="$PUBLIC_UPLOADS_MOUNT"
+      ;;
+    "/data/pmp"|"/data/pmp"/*)
+      REQUIRED_MOUNT="/data/pmp"
+      ;;
+    *)
+      REQUIRED_MOUNT=""
+      ;;
+  esac
+
+  if [ -n "$REQUIRED_MOUNT" ] && ! is_mounted "$REQUIRED_MOUNT"; then
+    echo "PMP storage requires a durable mount at $REQUIRED_MOUNT; refusing to start." >&2
     exit 1
   fi
 
@@ -21,12 +42,14 @@ prepare_private_storage() {
 
   # Best-effort transition for an installation whose legacy directory is
   # still reachable. Keep the source copy so this operation is retry-safe.
-  if [ "$PRIVATE_STORAGE_ROOT" != "$LEGACY_PRIVATE_STORAGE_ROOT" ] &&
-    [ -d "$LEGACY_PRIVATE_STORAGE_ROOT" ] &&
-    find "$LEGACY_PRIVATE_STORAGE_ROOT" -mindepth 1 -print -quit | grep -q .; then
-    echo "Copying legacy PMP files into durable storage at $PRIVATE_STORAGE_ROOT"
-    cp -a -n "$LEGACY_PRIVATE_STORAGE_ROOT"/. "$PRIVATE_STORAGE_ROOT"/
-  fi
+  for LEGACY_PRIVATE_STORAGE_ROOT in /app/private-uploads /data/pmp; do
+    if [ "$PRIVATE_STORAGE_ROOT" != "$LEGACY_PRIVATE_STORAGE_ROOT" ] &&
+      [ -d "$LEGACY_PRIVATE_STORAGE_ROOT" ] &&
+      find "$LEGACY_PRIVATE_STORAGE_ROOT" -mindepth 1 -print -quit | grep -q .; then
+      echo "Copying legacy PMP files from $LEGACY_PRIVATE_STORAGE_ROOT into $PRIVATE_STORAGE_ROOT"
+      cp -a -n "$LEGACY_PRIVATE_STORAGE_ROOT"/. "$PRIVATE_STORAGE_ROOT"/
+    fi
+  done
 
   WRITE_TEST="$PRIVATE_STORAGE_ROOT/.pmp-storage-write-test-$$"
   if ! (umask 077 && : > "$WRITE_TEST"); then

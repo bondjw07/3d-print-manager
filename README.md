@@ -214,7 +214,7 @@ Copy these files there:
 - `docker-compose.unraid.yml`
 - `.env.production.example` (rename to `.env.production`)
 
-The compose file mounts `print_portal_uploads` at both `/app/uploads` and `/app/public/uploads` so image storage stays compatible across older and newer app versions. It also bind-mounts private product artifacts from `/mnt/user/appdata/print-portal/files` to `/data/pmp` by default.
+The compose file mounts `/mnt/user/appdata/print-portal/uploads` at both `/app/uploads` and `/app/public/uploads` so image storage stays compatible across older and newer app versions. Managed product artifacts are stored in the `pmp-files` folder inside that existing mapping.
 
 Edit `.env.production`:
 
@@ -223,7 +223,7 @@ Edit `.env.production`:
   - `ghcr.io/your-owner/your-repo:dev` for dev deployments
   - `ghcr.io/your-owner/your-repo:main` for main deployments
 - keep `DATABASE_URL` in sync with the same password
-- keep `PMP_FILE_STORAGE_HOST_PATH=/mnt/user/appdata/print-portal/files`, or change it to another durable Unraid share included in your backups
+- keep `UPLOADS_HOST_PATH=/mnt/user/appdata/print-portal/uploads`, or change it to another durable Unraid share included in your backups
 
 ### 3) Start The Stack
 
@@ -235,16 +235,14 @@ docker compose --env-file .env.production -f docker-compose.unraid.yml up -d
 
 The app starts on port `APP_PORT` (default `3000`).
 
-At startup, the package verifies that `/data/pmp` is a real writable mount and
+At startup, the package verifies that `/app/public/uploads` is a real writable mount and
 refuses to start instead of silently storing private artifacts in the
 container layer. If a reachable legacy `/app/private-uploads` directory is
 present, its contents are copied into the durable mount without deleting the
 legacy copy.
 
-The mount is defined by `docker-compose.unraid.yml`, not by the container
-image. An image-only auto-update cannot add a host mount to an existing Unraid
-container; apply the updated compose definition once. Rebuilds and later
-updates will then reuse the same host directory automatically.
+Direct requests to `/uploads/pmp-files` are denied; private source archives and
+G-code remain available only through authenticated application download APIs.
 
 The container applies Prisma migrations at startup. For the known legacy
 duplicate-product-name recovery, the deployment package automatically marks
@@ -299,10 +297,9 @@ docker compose --env-file .env.production -f docker-compose.unraid.yml up -d
 Back up both:
 
 - PostgreSQL volume (`print_portal_postgres`)
-- upload files volume (`print_portal_uploads`)
-- private PMP file directory (`PMP_FILE_STORAGE_HOST_PATH`, default `/mnt/user/appdata/print-portal/files`)
+- uploads directory (`UPLOADS_HOST_PATH`, default `/mnt/user/appdata/print-portal/uploads`), including its private `pmp-files` subtree
 
-The database and private PMP directory should be backed up as one consistent set: the database stores hashes and opaque storage keys while the directory contains the corresponding file bytes.
+The database and uploads directory should be backed up as one consistent set: the database stores hashes and opaque storage keys while the directory contains the corresponding file bytes.
 
 Minimal Postgres dump example:
 

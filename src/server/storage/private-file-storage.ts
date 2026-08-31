@@ -13,7 +13,7 @@ export type StoredPrivateFile = {
 
 const configuredRoot = process.env.PMP_FILE_STORAGE_ROOT?.trim();
 export const privateFileStorageRoot = path.resolve(
-  /* turbopackIgnore: true */ configuredRoot || path.join(process.cwd(), "private-uploads"),
+  /* turbopackIgnore: true */ configuredRoot || path.join(process.cwd(), "public", "uploads", "pmp-files"),
 );
 
 function validateSegment(value: string) {
