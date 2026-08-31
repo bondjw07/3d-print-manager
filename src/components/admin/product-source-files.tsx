@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { readApiResponse } from "@/lib/api-response";
 
 type Candidate = { entryPath: string | null; fileName: string; sizeBytes: string };
 type Manifest = { kind: "THREE_MF" | "ZIP" | "OTHER"; threeMfCandidates: Candidate[]; entryCount?: number };
@@ -51,7 +52,7 @@ export function ProductSourceFiles({ productId, sourceFiles }: { productId: stri
             `/api/admin/products/${encodeURIComponent(productId)}/files/source?fileName=${encodeURIComponent(file.name)}`,
             { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } },
           );
-          const payload = await response.json();
+          const payload = await readApiResponse(response);
           if (!response.ok) throw new Error(`${file.name}: ${payload.error ?? "Upload failed."}`);
         }
         if (inputRef.current) inputRef.current.value = "";
@@ -104,7 +105,7 @@ export function ProductSourceFiles({ productId, sourceFiles }: { productId: stri
                 setError(null);
                 startTransition(async () => {
                   const response = await fetch(`/api/admin/products/${productId}/files/source/${sourceFile.id}`, { method: "DELETE" });
-                  const payload = await response.json();
+                  const payload = await readApiResponse(response);
                   if (!response.ok) setError(payload.error ?? "Unable to delete source file.");
                   else router.refresh();
                 });

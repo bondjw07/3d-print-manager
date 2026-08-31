@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { readApiResponse } from "@/lib/api-response";
 
 export function PrintReadyUpload({ productId }: { productId: string }) {
   const router = useRouter();
@@ -24,7 +25,7 @@ export function PrintReadyUpload({ productId }: { productId: string }) {
         body: file,
         headers: { "Content-Type": file.type || "application/octet-stream" },
       });
-      const payload = await response.json();
+      const payload = await readApiResponse(response);
       if (!response.ok) throw new Error(payload.error ?? "Upload failed.");
       if (inputRef.current) inputRef.current.value = "";
       setSuccess("Print-ready file uploaded.");

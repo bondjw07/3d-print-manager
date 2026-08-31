@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { readApiResponse } from "@/lib/api-response";
 
 export function P2sReferenceUpload() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export function P2sReferenceUpload() {
               body: file,
               headers: { "Content-Type": file.type || "model/3mf" },
             });
-            const payload = await response.json();
+            const payload = await readApiResponse(response);
             if (!response.ok) throw new Error(payload.error ?? "Upload failed.");
             if (inputRef.current) inputRef.current.value = "";
             setSuccess("P2S reference saved and validated.");

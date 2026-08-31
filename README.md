@@ -248,6 +248,22 @@ Point Nginx Proxy Manager / Traefik at:
 
 - `<unraid-ip>:3000` (or your custom `APP_PORT`)
 
+Large source archives must also be allowed by the reverse proxy. PMP streams
+uploads and enforces its own configurable limit, but an upstream proxy can
+reject the request before PMP sees it. For Nginx Proxy Manager, add settings
+equivalent to these in the Proxy Host's **Advanced** configuration, keeping
+`client_max_body_size` at least as large as PMP's configured upload limit:
+
+```nginx
+client_max_body_size 2048m;
+proxy_request_buffering off;
+proxy_read_timeout 3600s;
+proxy_send_timeout 3600s;
+```
+
+If a CDN sits in front of the proxy, its plan-specific upload cap must also be
+large enough; otherwise use the local Unraid URL for administrative uploads.
+
 ### 6) Updates From Repo
 
 Recommended flow:

@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { readApiResponse } from "@/lib/api-response";
 
 type Mapping = { id: string; colorName: string; hexColor: string; materialType: string; effectType: string | null };
 type Plate = { id: string; name: string; extruders: number[]; match: "exact" | "close" | "unmatched"; mappingId: string | null };
@@ -65,7 +66,7 @@ export function ThreeMfMappingReview(props: {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ sourceFileId: props.sourceFileId, entryPath: props.entryPath, selections }),
             });
-            const payload = await response.json();
+            const payload = await readApiResponse(response);
             if (!response.ok) throw new Error(payload.error ?? "Processing failed.");
             router.push(`/admin/products/${props.productId}/files?success=${encodeURIComponent("Processed P2S 3MF generated.")}`);
             router.refresh();

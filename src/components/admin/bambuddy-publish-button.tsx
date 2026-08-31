@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { readApiResponse } from "@/lib/api-response";
 
 export function BambuBuddyPublishButton({ productId, publishedIsCurrent, blockedReason }: { productId: string; publishedIsCurrent: boolean; blockedReason?: string }) {
   const router = useRouter();
@@ -15,7 +16,7 @@ export function BambuBuddyPublishButton({ productId, publishedIsCurrent, blocked
       startTransition(async () => {
         try {
           const response = await fetch(`/api/admin/products/${productId}/files/publish`, { method: "POST" });
-          const payload = await response.json();
+          const payload = await readApiResponse(response);
           if (!response.ok) throw new Error(payload.error ?? "Publish failed.");
           setSuccess(publishedIsCurrent ? "BamBuddy tags and metadata re-synced." : `Published to BamBuddy as File ID ${payload.fileId}.`);
           router.refresh();
