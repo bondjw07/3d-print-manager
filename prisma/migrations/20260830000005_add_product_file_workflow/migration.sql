@@ -1,5 +1,25 @@
 -- Product names become the stable, human-readable leaf in the BambuBuddy
 -- creator/product hierarchy. Guard both exact and normalized duplicates.
+-- Preserve the oldest product for each normalized name. The later duplicates
+-- remain intact but receive a deterministic, actionable suffix before the new
+-- indexes are created. Administrators can rename them to a better public name
+-- after the migration without losing product history or linked records.
+WITH ranked_products AS (
+    SELECT
+        "id",
+        btrim("publicName") AS trimmed_public_name,
+        row_number() OVER (
+            PARTITION BY lower(btrim("publicName"))
+            ORDER BY "createdAt" ASC, "id" ASC
+        ) AS duplicate_rank
+    FROM "Product"
+)
+UPDATE "Product" AS product
+SET "publicName" = ranked_products.trimmed_public_name || ' (Duplicate ' || ranked_products."id" || ')'
+FROM ranked_products
+WHERE product."id" = ranked_products."id"
+  AND ranked_products.duplicate_rank > 1;
+
 CREATE UNIQUE INDEX "Product_publicName_key" ON "Product"("publicName");
 CREATE UNIQUE INDEX "Product_publicName_normalized_key"
 ON "Product" (lower(btrim("publicName")));
