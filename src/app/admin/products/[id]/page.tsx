@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ProductPhotoCarousel } from "@/components/admin/product-photo-carousel";
 import { ProductForm } from "@/components/forms/product-form";
@@ -149,7 +149,7 @@ export default async function ProductDetailAdminPage({
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Product Detail</p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">{product.publicName}</h1>
-            <p className="mt-1 text-sm text-slate-600">SKU: {product.sku}</p>
+            <p className="mt-1 text-sm text-slate-600">SKU: {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">{product.sku}<ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden /></a> : product.sku}</p>
           </div>
           {query.list && currentProductIndex >= 0 ? <div className="flex items-center gap-2 text-sm text-slate-500">
             <span className="hidden sm:inline">{currentProductIndex + 1} of {orderedProducts.length}</span>

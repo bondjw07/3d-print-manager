@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, DollarSign, Folder, Paperclip, SlidersHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, DollarSign, ExternalLink, Folder, Paperclip, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -386,7 +386,7 @@ export default async function AdminProductsPage({
                       </div>
                     </td>
                     <td className="px-0 py-0">
-                      {product.importSourceCreatorUrl?.trim() ? <a href={product.importSourceCreatorUrl} target="_blank" rel="noreferrer" className="block px-2 py-3 text-sm text-slate-600 hover:underline">{product.sku}</a> : <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">{product.sku}</Link>}
+                      {product.importSourceUrl?.trim() ? <a href={product.importSourceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-2 py-3 text-sm text-slate-600 hover:underline">{product.sku}<ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden /></a> : <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">{product.sku}</Link>}
                     </td>
                     <td className="px-0 py-0">
                       <Link href={productDetailHref(product.id)} className="block px-2 py-3">
