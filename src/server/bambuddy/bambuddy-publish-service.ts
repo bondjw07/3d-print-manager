@@ -6,10 +6,10 @@ import { updateBambuBuddyProductData } from "@/server/services/product-service";
 import {
   BambuBuddyApiError,
   BambuBuddyClient,
-  normalizeBambuBuddyFolderName,
   resolveBambuBuddyFolderHierarchy,
   type BambuBuddyFile,
 } from "./bambuddy-client";
+import { chooseBambuBuddyGcodeFileName } from "./bambuddy-file-name";
 
 function finiteNonNegativeNumber(value: unknown) {
   const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
@@ -93,13 +93,22 @@ export async function publishProductPrintReadyFile(productId: string) {
     const folderId = linkedFileIsCurrent && linkedFile && linkedFile.folder_id !== null
       ? linkedFile.folder_id
       : await resolveBambuBuddyFolderHierarchy(client, [creator, product.publicName]);
-    const fileName = `${normalizeBambuBuddyFolderName(product.publicName)}--${artifact.sha256.slice(0, 12)}.gcode.3mf`;
+    let fileName = artifact.bambuBuddyFileName ?? (linkedFileIsCurrent ? linkedFile?.filename ?? null : null);
     let fileId: number;
 
     if (linkedFile && linkedFileIsCurrent) {
       fileId = linkedFile.id;
     } else {
-      const existing = (await client.listFiles(folderId)).find((file) => file.filename === fileName);
+      const folderFiles = await client.listFiles(folderId);
+      if (!fileName) {
+        fileName = chooseBambuBuddyGcodeFileName(
+          product.publicName,
+          artifact.artifactVersionAt,
+          folderFiles.map((file) => file.filename),
+        );
+        await prisma.productArtifact.update({ where: { id: artifact.id }, data: { bambuBuddyFileName: fileName } });
+      }
+      const existing = folderFiles.find((file) => file.filename === fileName);
       if (existing && existing.file_size !== Number(artifact.sizeBytes)) {
         throw new Error(`BambuBuddy already contains ${fileName} with a different size. Resolve that collision before retrying.`);
       }
@@ -122,7 +131,7 @@ export async function publishProductPrintReadyFile(productId: string) {
       filamentUsedGrams: finiteNonNegativeNumber(remoteFile.metadata?.filament_used_grams ?? remoteFile.filament_used_grams),
       filamentRequirements: filamentRequirements(remoteFile),
     });
-    return { fileId, fileName };
+    return { fileId, fileName: fileName ?? linkedFile?.filename ?? null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "BambuBuddy publish failed.";
     await prisma.productArtifact.update({ where: { id: artifact.id }, data: { lastPublishError: message, lastPublishAttemptAt: new Date() } });

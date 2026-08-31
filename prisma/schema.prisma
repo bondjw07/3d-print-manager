@@ -233,6 +233,8 @@ model ProductArtifact {
   sourceArchiveEntryPath    String?
   basedOnProcessedSha256    String?
   publishedSha256           String?
+  artifactVersionAt         DateTime            @default(now())
+  bambuBuddyFileName        String?
   bambuBuddyTagsSyncedAt    DateTime?
   lastPublishAttemptAt      DateTime?
   lastPublishError          String?

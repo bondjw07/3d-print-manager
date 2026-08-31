@@ -142,6 +142,10 @@ Imports are deduped by source + source product ID when available, with URL fallb
 5. Upload that `.gcode.3mf`. If the processed artifact changes later, the UI marks the prior print-ready file stale and blocks publishing until it is replaced.
 6. Publish to BamBuddy. A creator is required. Product public names are unique, BamBuddy folders use `<creator>/<product name>`, and BamBuddy tags are replaced exactly with the product's PMP tags. Older BamBuddy files are intentionally retained.
 
+Published G-code filenames use `<product name>_YYYY-MM-DD.gcode.3mf`. If more
+than one version is published on the same date, PMP adds `_2`, `_3`, and so on;
+the chosen filename is retained for safe publish retries.
+
 Source files are never overwritten. Each product has one current processed artifact and one current print-ready artifact. Replacing the global P2S reference automatically changes the profiles available to subsequent processing runs.
 
 ## Architecture Notes

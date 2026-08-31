@@ -34,6 +34,7 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
   if (contentLength && BigInt(contentLength) > settings.fileUploadMaxBytes) return NextResponse.json({ error: "File exceeds the configured upload limit." }, { status: 413 });
 
   const storageKey = productArtifactStorageKey(productId, "print-ready", originalName);
+  const artifactVersionAt = new Date();
   try {
     const stored = await privateFileStorage.saveWebStream(storageKey, request.body, settings.fileUploadMaxBytes);
     try {
@@ -54,6 +55,7 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
           sizeBytes: stored.sizeBytes,
           sha256: stored.sha256,
           basedOnProcessedSha256: processed.sha256,
+          artifactVersionAt,
         },
         update: {
           storageKey,
@@ -62,6 +64,8 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
           sizeBytes: stored.sizeBytes,
           sha256: stored.sha256,
           basedOnProcessedSha256: processed.sha256,
+          artifactVersionAt,
+          bambuBuddyFileName: null,
           lastPublishError: null,
         },
       });

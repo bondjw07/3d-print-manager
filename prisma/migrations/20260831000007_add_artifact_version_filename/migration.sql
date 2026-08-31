@@ -1,0 +1,3 @@
+ALTER TABLE "ProductArtifact"
+ADD COLUMN "artifactVersionAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN "bambuBuddyFileName" TEXT;
