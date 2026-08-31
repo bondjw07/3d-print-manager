@@ -31,7 +31,7 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
   - review every plate-to-filament mapping before applying the replaceable P2S template
   - download the current processed 3MF for manual slicing in Bambu Studio
   - upload only the resulting `.gcode.3mf` as the current print-ready artifact
-  - publish to BamBuddy under `<creator>/<product name>` and replace its tags with PMP tags
+  - publish to BamBuddy under `<creator>/<product name>` and replace its tags with PMP tags plus an optional category mapping
 - Filament catalog + per-product filament requirements
 - Request user flow
   - submit requests
@@ -140,7 +140,7 @@ Imports are deduped by source + source product ID when available, with URL fallb
 3. Select a 3MF candidate, review and explicitly confirm every plate mapping, then choose **Apply P2S Template & Map Colors**. This intentionally replaces the complete `Metadata/project_settings.config` with the reference template before applying mappings.
 4. Download the processed 3MF, open it in Bambu Studio, slice it, and export the result as `.gcode.3mf`.
 5. Upload that `.gcode.3mf`. If the processed artifact changes later, the UI marks the prior print-ready file stale and blocks publishing until it is replaced.
-6. Publish to BamBuddy. A creator is required. Product public names are unique, BamBuddy folders use `<creator>/<product name>`, and BamBuddy tags are replaced exactly with the product's PMP tags. Older BamBuddy files are intentionally retained.
+6. Publish to BamBuddy. A creator is required. Product public names are unique, BamBuddy folders use `<creator>/<product name>`, and BamBuddy tags are replaced with the product's PMP tags plus any optional tag configured for its product category. Older BamBuddy files are intentionally retained.
 
 Published G-code filenames use `<product name>_YYYY-MM-DD.gcode.3mf`. If more
 than one version is published on the same date, PMP adds `_2`, `_3`, and so on;

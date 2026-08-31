@@ -10,6 +10,7 @@ import {
   type BambuBuddyFile,
 } from "./bambuddy-client";
 import { chooseBambuBuddyGcodeFileName } from "./bambuddy-file-name";
+import { getBambuBuddyTagForProductCategory, getBambuBuddyCategoryTagMappings } from "@/server/services/bambuddy-category-tag-mapping-service";
 
 function finiteNonNegativeNumber(value: unknown) {
   const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
@@ -67,12 +68,13 @@ async function syncTags(client: BambuBuddyClient, fileId: number, productTags: s
 }
 
 export async function publishProductPrintReadyFile(productId: string) {
-  const [product, artifact, processed, settings, apiKey] = await Promise.all([
+  const [product, artifact, processed, settings, apiKey, categoryTagMappings] = await Promise.all([
     prisma.product.findUnique({ where: { id: productId } }),
     prisma.productArtifact.findUnique({ where: { productId_kind: { productId, kind: "PRINT_READY" } } }),
     prisma.productArtifact.findUnique({ where: { productId_kind: { productId, kind: "PROCESSED_3MF" } } }),
     getSettings(),
     getBambuBuddyApiKey(),
+    getBambuBuddyCategoryTagMappings(),
   ]);
   if (!product) throw new Error("Product not found.");
   if (!artifact) throw new Error("Upload a print-ready .gcode.3mf before publishing.");
@@ -120,7 +122,8 @@ export async function publishProductPrintReadyFile(productId: string) {
       prisma.productArtifact.update({ where: { id: artifact.id }, data: { publishedSha256: artifact.sha256, lastPublishError: null } }),
     ]);
 
-    await syncTags(client, fileId, product.tags);
+    const categoryTag = getBambuBuddyTagForProductCategory(product.category, categoryTagMappings);
+    await syncTags(client, fileId, categoryTag ? [...product.tags, categoryTag] : product.tags);
     await prisma.productArtifact.update({ where: { id: artifact.id }, data: { bambuBuddyTagsSyncedAt: new Date(), lastPublishError: null } });
 
     const remoteFile = await client.getFile(fileId);

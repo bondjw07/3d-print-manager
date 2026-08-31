@@ -85,6 +85,7 @@ import {
 import { importProductFromSourceUrl, refreshProductFromSourceUrl } from "@/server/services/product-import-service";
 import { createPricingTier, deletePricingTier, ensurePricingTierForCategory, ensurePricingTierForProducts, updatePricingTier } from "@/server/services/pricing-tier-service";
 import { saveShopifyCategoryTagMapping } from "@/server/services/shopify-category-tag-mapping-service";
+import { saveBambuBuddyCategoryTagMapping } from "@/server/services/bambuddy-category-tag-mapping-service";
 import { getBambuBuddyApiKey, saveBambuBuddyApiKey } from "@/server/services/bambuddy-auth-service";
 import { upsertBambuBuddyFilamentMapping } from "@/server/services/bambuddy-filament-mapping-service";
 import { applySourceMigrationRows, buildThangsCreatorMigrationFromCsv, setSourceMigrationRowTarget } from "@/server/services/source-migration-service";
@@ -129,6 +130,7 @@ import {
   settingsSchema,
   appVersionSchema,
   shopifyCategoryTagMappingSchema,
+  bambuBuddyCategoryTagMappingSchema,
   userAdminUpdateSchema,
   sourceMigrationApplySchema,
   sourceMigrationScanSchema,
@@ -588,6 +590,21 @@ export async function saveShopifyCategoryTagMappingAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/listings");
   redirect(appendStatus(redirectTo, "success", "Shopify category mapping saved."));
+}
+
+export async function saveBambuBuddyCategoryTagMappingAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = bambuBuddyCategoryTagMappingSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  try {
+    await ensureManagedProductCategory(parsed.data.category);
+    await saveBambuBuddyCategoryTagMapping(parsed.data.category, parsed.data.bambuBuddyTag);
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save BamBuddy category mapping."));
+  }
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "BamBuddy category mapping saved."));
 }
 
 export async function createPricingTierAction(formData: FormData) {

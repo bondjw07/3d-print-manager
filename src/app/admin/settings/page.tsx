@@ -26,6 +26,7 @@ import {
   updateMyMiniFactoryCredentialsAction,
   saveShopifyCredentialsAction,
   saveShopifyCategoryTagMappingAction,
+  saveBambuBuddyCategoryTagMappingAction,
   testShopifyConnectionAction,
   scanThangsCreatorMigrationAction,
   importThangsCatalogCsvAction,
@@ -51,6 +52,7 @@ import { getShopifyCategoryTagMappings } from "@/server/services/shopify-categor
 import { getBuildVersion } from "@/lib/build-info";
 import { getLatestSourceMigration } from "@/server/services/source-migration-service";
 import { getBambuBuddyFilamentMappings } from "@/server/services/bambuddy-filament-mapping-service";
+import { getBambuBuddyCategoryTagMappings } from "@/server/services/bambuddy-category-tag-mapping-service";
 import { getP2sReference } from "@/server/services/p2s-reference-service";
 import { referenceProfileNames } from "@/server/files/three-mf-processor";
 import { P2sReferenceUpload } from "@/components/admin/p2s-reference-upload";
@@ -60,7 +62,7 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ tab?: string; error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration, bambuBuddyMappings, p2sReference] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration, bambuBuddyMappings, bambuBuddyCategoryMappings, p2sReference] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
@@ -71,6 +73,7 @@ export default async function AdminSettingsPage({
     getShopifyCategoryTagMappings(),
     getLatestSourceMigration(),
     getBambuBuddyFilamentMappings(),
+    getBambuBuddyCategoryTagMappings(),
     getP2sReference(),
   ]);
   const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
@@ -132,6 +135,22 @@ export default async function AdminSettingsPage({
               <p className="text-xs text-slate-500">Stored encrypted and sent as the <code>X-API-Key</code> header when importing file data. {settings.bambuBuddyApiKeyEncrypted ? "An API key is configured." : "No API key is configured."}</p>
               <Button type="submit" className="w-fit">Save API Key</Button>
             </form>
+            <div className="space-y-2 border-t border-slate-200 pt-5">
+              <div>
+                <p className="font-medium text-slate-800">Product category tags</p>
+                <p className="mt-1 text-xs text-slate-500">Optionally add one BamBuddy-only tag for each product category. This does not change PMP product tags or Shopify tags.</p>
+              </div>
+              {settings.productCategories.map((category) => {
+                const currentTag = bambuBuddyCategoryMappings.find((mapping) => mapping.category === category)?.bambuBuddyTag ?? "";
+                return <form action={saveBambuBuddyCategoryTagMappingAction} key={category} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+                  <input type="hidden" name="category" value={category} />
+                  <p className="pt-2 text-sm font-medium text-slate-700">{category}</p>
+                  <Input name="bambuBuddyTag" defaultValue={currentTag} placeholder="No BamBuddy tag" maxLength={120} />
+                  <Button type="submit" variant="secondary">Save</Button>
+                </form>;
+              })}
+            </div>
             <form action={updateDefaultFilamentSpoolCostAction} className="grid gap-3 border-t border-slate-200 pt-5">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
               <label className="grid gap-1 text-sm font-medium text-slate-800">Default 1 kg spool cost<Input name="defaultFilamentSpoolCost" type="number" min="0" step="0.01" defaultValue={settings.defaultFilamentSpoolCost.toString()} required /></label>

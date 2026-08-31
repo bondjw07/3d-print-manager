@@ -384,6 +384,11 @@ export const shopifyCategoryTagMappingSchema = z.object({
   categoryTag: z.string().trim(),
 });
 
+export const bambuBuddyCategoryTagMappingSchema = z.object({
+  category: z.string().trim().min(2),
+  bambuBuddyTag: z.string().trim().max(120),
+});
+
 const printerUtilizationRateValues = printerUtilizationRateOptions.map((option) => option.value.toString()) as [
   string,
   ...string[],
