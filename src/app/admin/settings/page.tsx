@@ -32,6 +32,7 @@ import {
   setSourceMigrationRowTargetAction,
   updatePublicAppUrlAction,
   updateBambuBuddyBaseUrlAction,
+  updateFileWorkflowLimitsAction,
   saveBambuBuddyApiKeyAction,
   importBambuBuddyFilamentMappingsAction,
   saveBambuBuddyFilamentMappingAction,
@@ -50,13 +51,16 @@ import { getShopifyCategoryTagMappings } from "@/server/services/shopify-categor
 import { getBuildVersion } from "@/lib/build-info";
 import { getLatestSourceMigration } from "@/server/services/source-migration-service";
 import { getBambuBuddyFilamentMappings } from "@/server/services/bambuddy-filament-mapping-service";
+import { getP2sReference } from "@/server/services/p2s-reference-service";
+import { referenceProfileNames } from "@/server/files/three-mf-processor";
+import { P2sReferenceUpload } from "@/components/admin/p2s-reference-upload";
 
 export default async function AdminSettingsPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; error?: string; success?: string }>;
 }) {
-  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration, bambuBuddyMappings] = await Promise.all([
+  const [params, settings, processingSettings, myMiniFactoryStatus, shopifyStatus, creators, pricingTiers, shopifyCategoryMappings, latestSourceMigration, bambuBuddyMappings, p2sReference] = await Promise.all([
     searchParams,
     getSettings(),
     getProcessingEstimateSettings(),
@@ -67,6 +71,7 @@ export default async function AdminSettingsPage({
     getShopifyCategoryTagMappings(),
     getLatestSourceMigration(),
     getBambuBuddyFilamentMappings(),
+    getP2sReference(),
   ]);
   const tab = ["catalog", "marketplace", "integrations", "operations"].includes(params.tab ?? "") ? params.tab! : "catalog";
   const tabClass = (name: string) => `rounded-t-xl px-4 py-2 text-sm font-medium ${tab === name ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`;
@@ -133,7 +138,30 @@ export default async function AdminSettingsPage({
               <p className="text-xs text-slate-500">Used to estimate material cost for products with BambuBuddy requirements. Legacy filament costs remain only as a fallback for products that have not been imported.</p>
               <Button type="submit" className="w-fit">Save Default Spool Cost</Button>
             </form>
-            <form action={importBambuBuddyFilamentMappingsAction} className="grid gap-3 border-t border-slate-200 pt-5" encType="multipart/form-data">
+            <form action={updateFileWorkflowLimitsAction} className="grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2">
+              <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
+              <div className="md:col-span-2">
+                <p className="font-medium text-slate-800">Product file safety limits</p>
+                <p className="mt-1 text-xs text-slate-500">Applied to source packages, P2S references, processed files, and print-ready uploads.</p>
+              </div>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Maximum uploaded file (GiB)<Input name="fileUploadMaxGiB" type="number" min="0.05" max="100" step="0.05" defaultValue={Number(settings.fileUploadMaxBytes) / 1024 ** 3} required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Maximum expanded ZIP (GiB)<Input name="zipExpandedMaxGiB" type="number" min="0.05" max="500" step="0.05" defaultValue={Number(settings.zipExpandedMaxBytes) / 1024 ** 3} required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Maximum ZIP entries<Input name="zipMaxEntries" type="number" min="1" max="100000" step="1" defaultValue={settings.zipMaxEntries} required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">Maximum compression ratio<Input name="zipMaxCompressionRatio" type="number" min="2" max="10000" step="1" defaultValue={settings.zipMaxCompressionRatio} required /></label>
+              <div className="md:col-span-2"><Button type="submit" variant="secondary">Save File Limits</Button></div>
+            </form>
+            <div className="space-y-3 border-t border-slate-200 pt-5">
+              <div>
+                <p className="font-medium text-slate-800">P2S processing reference</p>
+                <p className="mt-1 text-xs text-slate-500">Processing intentionally replaces the complete Bambu Studio project settings with this reference, then applies the reviewed colors and matching filament profiles.</p>
+              </div>
+              {p2sReference ? <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p><span className="font-medium text-slate-800">Current:</span> {p2sReference.originalName} · SHA-256 {p2sReference.sha256.slice(0, 12)}…</p>
+                <p className="mt-1"><span className="font-medium text-slate-800">Detected profiles:</span> {referenceProfileNames((p2sReference.extractedSettings ?? {}) as Record<string, unknown>).join(", ") || "None"}</p>
+              </div> : <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">No P2S reference configured. Product processing is blocked until one is uploaded.</p>}
+              <P2sReferenceUpload />
+            </div>
+            <form action={importBambuBuddyFilamentMappingsAction} className="grid gap-3 border-t border-slate-200 pt-5">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
               <label className="grid gap-1 text-sm font-medium text-slate-800">Import color mappings CSV<Input name="mappingFile" type="file" accept="text/csv,.csv,application/json,.json" required /></label>
               <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy material type (optional)<Input name="materialType" placeholder="PLA" /></label>

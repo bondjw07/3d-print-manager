@@ -166,6 +166,23 @@ export default async function ProductDetailAdminPage({
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{query.success}</p>
       ) : null}
 
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle>Files &amp; Print Preparation</CardTitle>
+            <CardDescription>Manage original source packages, P2S processing, slicing, and BamBuddy publishing.</CardDescription>
+          </div>
+          <Link href={`/admin/products/${product.id}/files`}><Button variant="secondary">Open Files</Button></Link>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2 text-sm text-slate-600">
+          <span>{product.sourceFiles.length} source file{product.sourceFiles.length === 1 ? "" : "s"}</span>
+          <span aria-hidden>·</span>
+          <span>{product.artifacts.some((artifact) => artifact.kind === "PROCESSED_3MF") ? "Processed 3MF ready" : "Not processed"}</span>
+          <span aria-hidden>·</span>
+          <span>{product.artifacts.some((artifact) => artifact.kind === "PRINT_READY") ? "Print-ready file uploaded" : "Awaiting sliced file"}</span>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
         <Card>
           <CardHeader>

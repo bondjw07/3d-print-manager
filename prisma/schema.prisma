@@ -101,6 +101,15 @@ enum QueuePriority {
   URGENT
 }
 
+enum ProductArtifactKind {
+  PROCESSED_3MF
+  PRINT_READY
+}
+
+enum ApplicationFileKind {
+  P2S_REFERENCE
+}
+
 enum MarketplaceEventType {
   SALE_OCCURRED
   LISTING_REMOVED
@@ -141,7 +150,7 @@ model Product {
   id               String        @id @default(cuid())
   slug             String        @unique
   internalName     String
-  publicName       String
+  publicName       String        @unique
   shortDescription String
   fullDescription  String
   category         String
@@ -182,6 +191,8 @@ model Product {
   inventoryRecord      InventoryRecord?
   marketplaceEvents    MarketplaceEvent[]
   sourceMigrationRows  SourceMigrationRow[]
+  sourceFiles          ProductSourceFile[]
+  artifacts            ProductArtifact[]
   pricingTier          PricingTier? @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
 
   @@index([status, isPublic])
@@ -189,6 +200,64 @@ model Product {
   @@index([pricingTierId])
   @@unique([importSource, importSourceReferenceId])
   @@unique([importSource, importSourceNormalizedUrl])
+}
+
+model ProductSourceFile {
+  id              String   @id @default(cuid())
+  productId       String
+  originalName    String
+  storageKey      String   @unique
+  mediaType       String?
+  sizeBytes       BigInt
+  sha256          String
+  packageManifest Json?
+  createdAt       DateTime @default(now())
+
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  artifacts ProductArtifact[]
+
+  @@index([productId, createdAt])
+  @@index([sha256])
+}
+
+model ProductArtifact {
+  id                        String              @id @default(cuid())
+  productId                 String
+  kind                      ProductArtifactKind
+  storageKey                String              @unique
+  downloadName              String
+  mediaType                 String?
+  sizeBytes                 BigInt
+  sha256                    String
+  sourceFileId              String?
+  sourceArchiveEntryPath    String?
+  basedOnProcessedSha256    String?
+  publishedSha256           String?
+  bambuBuddyTagsSyncedAt    DateTime?
+  lastPublishAttemptAt      DateTime?
+  lastPublishError          String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  product    Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceFile ProductSourceFile? @relation(fields: [sourceFileId], references: [id], onDelete: SetNull)
+
+  @@unique([productId, kind])
+  @@index([sourceFileId])
+  @@index([sha256])
+}
+
+model ApplicationFile {
+  id                String              @id @default(cuid())
+  kind              ApplicationFileKind @unique
+  originalName      String
+  storageKey        String              @unique
+  mediaType         String?
+  sizeBytes         BigInt
+  sha256            String
+  extractedSettings Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 }
 
 model SourceMigration {
@@ -498,6 +567,10 @@ model AppSetting {
   publicAppUrl                       String?
   bambuBuddyBaseUrl                  String?
   bambuBuddyApiKeyEncrypted          String?
+  fileUploadMaxBytes                 BigInt          @default(2147483648)
+  zipExpandedMaxBytes                BigInt          @default(10737418240)
+  zipMaxEntries                      Int             @default(10000)
+  zipMaxCompressionRatio             Int             @default(100)
   defaultFilamentSpoolCost            Decimal         @default(20) @db.Decimal(10, 2)
   productCategories                  String[]        @default([])
   createdAt          DateTime        @default(now())

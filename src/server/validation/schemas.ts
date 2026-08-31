@@ -460,6 +460,13 @@ export const defaultFilamentSpoolCostSchema = z.object({
   defaultFilamentSpoolCost: z.coerce.number().min(0).max(1000),
 });
 
+export const fileWorkflowLimitsSchema = z.object({
+  fileUploadMaxGiB: z.coerce.number().min(0.05).max(100),
+  zipExpandedMaxGiB: z.coerce.number().min(0.05).max(500),
+  zipMaxEntries: z.coerce.number().int().min(1).max(100_000),
+  zipMaxCompressionRatio: z.coerce.number().int().min(2).max(10_000),
+});
+
 export const marketplaceEventSimulationSchema = z.object({
   marketplaceType: z.nativeEnum(MarketplaceType),
   eventType: z.enum(["SALE_OCCURRED", "LISTING_REMOVED", "LISTING_CHANGED_EXTERNALLY"]),

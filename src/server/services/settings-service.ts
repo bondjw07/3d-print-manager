@@ -47,6 +47,35 @@ export async function updateBambuBuddyBaseUrl(bambuBuddyBaseUrl: string) {
   });
 }
 
+const bytesPerGiB = 1024 ** 3;
+
+export async function updateFileWorkflowLimits(input: {
+  fileUploadMaxGiB: number;
+  zipExpandedMaxGiB: number;
+  zipMaxEntries: number;
+  zipMaxCompressionRatio: number;
+}) {
+  const fileUploadMaxBytes = BigInt(Math.floor(input.fileUploadMaxGiB * bytesPerGiB));
+  const zipExpandedMaxBytes = BigInt(Math.floor(input.zipExpandedMaxGiB * bytesPerGiB));
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: {
+      id: "app",
+      defaultMarketplace: "ETSY",
+      fileUploadMaxBytes,
+      zipExpandedMaxBytes,
+      zipMaxEntries: input.zipMaxEntries,
+      zipMaxCompressionRatio: input.zipMaxCompressionRatio,
+    },
+    update: {
+      fileUploadMaxBytes,
+      zipExpandedMaxBytes,
+      zipMaxEntries: input.zipMaxEntries,
+      zipMaxCompressionRatio: input.zipMaxCompressionRatio,
+    },
+  });
+}
+
 export async function updateDefaultFilamentSpoolCost(defaultFilamentSpoolCost: number) {
   return prisma.appSetting.upsert({
     where: { id: "app" },

@@ -25,6 +25,31 @@ async function ensureUniqueSlug(baseSlug: string, currentProductId?: string) {
   }
 }
 
+async function ensureUniquePublicName(publicName: string, currentProductId?: string) {
+  const existing = await prisma.product.findFirst({
+    where: {
+      publicName: { equals: publicName.trim(), mode: "insensitive" },
+      ...(currentProductId ? { id: { not: currentProductId } } : {}),
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    throw new Error("Product name must be unique.");
+  }
+}
+
+function rethrowFriendlyPublicNameConflict(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const target = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+    if (target.includes("publicName") || String(error.meta?.constraint ?? "").includes("publicName")) {
+      throw new Error("Product name must be unique.");
+    }
+  }
+
+  throw error;
+}
+
 function normalizeCreatorName(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -287,6 +312,8 @@ export async function getProductByIdForAdmin(id: string) {
         orderBy: { sortOrder: "asc" },
       },
       bambuBuddyFilamentRequirements: { orderBy: { sortOrder: "asc" } },
+      sourceFiles: { orderBy: { createdAt: "desc" } },
+      artifacts: true,
       _count: {
         select: {
           requests: true,
@@ -341,6 +368,7 @@ export async function createProduct(data: {
   importSourceCreatorName?: string;
   importSourceCreatorUrl?: string;
 }) {
+  await ensureUniquePublicName(data.publicName);
   const baseSlug = slugify(data.publicName);
   const slug = await ensureUniqueSlug(baseSlug);
   let importSourceCreatorName = normalizeCreatorName(data.importSourceCreatorName) ?? undefined;
@@ -404,12 +432,14 @@ export async function createProduct(data: {
     return product;
   } catch (error) {
     if (!isUnknownImportIdentityArgumentError(error)) {
-      throw error;
+      rethrowFriendlyPublicNameConflict(error);
     }
 
-    return prisma.product.create({
-      data: baseCreateData,
-    });
+    try {
+      return await prisma.product.create({ data: baseCreateData });
+    } catch (fallbackError) {
+      rethrowFriendlyPublicNameConflict(fallbackError);
+    }
   }
 }
 
@@ -442,6 +472,7 @@ export async function updateProduct(
     importSourceCreatorUrl?: string;
   },
 ) {
+  await ensureUniquePublicName(data.publicName, productId);
   const baseSlug = slugify(data.publicName);
   const slug = await ensureUniqueSlug(baseSlug, productId);
   const creatorUpdate: Prisma.ProductUncheckedUpdateInput = {};
@@ -458,9 +489,10 @@ export async function updateProduct(
     creatorUpdate.importSourceCreatorUrl = normalizeCreatorUrl(data.importSourceCreatorUrl);
   }
 
-  return prisma.product.update({
-    where: { id: productId },
-    data: {
+  try {
+    return await prisma.product.update({
+      where: { id: productId },
+      data: {
       slug,
       internalName: data.internalName,
       publicName: data.publicName,
@@ -483,9 +515,12 @@ export async function updateProduct(
       bambuBuddyFileId: data.bambuBuddyFileId?.trim() || null,
       productionNotes: data.productionNotes,
       printNotes: data.printNotes,
-      ...creatorUpdate,
-    },
-  });
+        ...creatorUpdate,
+      },
+    });
+  } catch (error) {
+    rethrowFriendlyPublicNameConflict(error);
+  }
 }
 
 export async function updateBambuBuddyProductData(input: {
@@ -821,6 +856,8 @@ export async function deleteProduct(productId: string, options?: { force?: boole
           imagePath: true,
         },
       },
+      sourceFiles: { select: { storageKey: true } },
+      artifacts: { select: { storageKey: true } },
       _count: {
         select: {
           requests: true,
@@ -867,6 +904,10 @@ export async function deleteProduct(productId: string, options?: { force?: boole
 
   return {
     deletedImagePaths: product.images.map((image) => image.imagePath),
+    deletedPrivateStorageKeys: [
+      ...product.sourceFiles.map((file) => file.storageKey),
+      ...product.artifacts.map((artifact) => artifact.storageKey),
+    ],
     deletedQueueCount,
     deletedRequestCount,
   };
@@ -880,6 +921,8 @@ export async function deleteAllProducts() {
           imagePath: true,
         },
       },
+      sourceFiles: { select: { storageKey: true } },
+      artifacts: { select: { storageKey: true } },
     },
   });
 
@@ -900,6 +943,10 @@ export async function deleteAllProducts() {
 
   return {
     deletedImagePaths: products.flatMap((product) => product.images.map((image) => image.imagePath)),
+    deletedPrivateStorageKeys: products.flatMap((product) => [
+      ...product.sourceFiles.map((file) => file.storageKey),
+      ...product.artifacts.map((artifact) => artifact.storageKey),
+    ]),
     deletedQueueCount,
     deletedRequestCount,
     deletedProductCount,

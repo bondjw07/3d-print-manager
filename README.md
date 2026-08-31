@@ -26,6 +26,12 @@ Enterprise-style MVP for managing a 3D printing operation across catalog, reques
   - upload images
   - set primary image
   - delete images
+- Product file workflow
+  - preserve immutable source `.3mf` files and ZIP packages in private storage
+  - review every plate-to-filament mapping before applying the replaceable P2S template
+  - download the current processed 3MF for manual slicing in Bambu Studio
+  - upload only the resulting `.gcode.3mf` as the current print-ready artifact
+  - publish to BamBuddy under `<creator>/<product name>` and replace its tags with PMP tags
 - Filament catalog + per-product filament requirements
 - Request user flow
   - submit requests
@@ -116,6 +122,7 @@ Admin:
 - `/admin/queue`
 - `/admin/inventory`
 - `/admin/settings`
+- `/admin/products/[id]/files`
 
 On `/admin/products`, use **Imports** for:
 
@@ -125,6 +132,17 @@ On `/admin/products`, use **Imports** for:
 - MyMiniFactory creator bulk import (public objects only, requires OAuth setup in `/admin/settings`)
 
 Imports are deduped by source + source product ID when available, with URL fallback matching.
+
+## Product File Workflow
+
+1. In **Admin → Settings → Integrations → BambuBuddy**, configure the BamBuddy URL/API key, upload the current P2S reference `.3mf`, and set upload/ZIP safety limits.
+2. Open a product's **Files** page and upload one or more source `.3mf` or `.zip` files. ZIPs remain intact; the app records their contained 3MF candidates.
+3. Select a 3MF candidate, review and explicitly confirm every plate mapping, then choose **Apply P2S Template & Map Colors**. This intentionally replaces the complete `Metadata/project_settings.config` with the reference template before applying mappings.
+4. Download the processed 3MF, open it in Bambu Studio, slice it, and export the result as `.gcode.3mf`.
+5. Upload that `.gcode.3mf`. If the processed artifact changes later, the UI marks the prior print-ready file stale and blocks publishing until it is replaced.
+6. Publish to BamBuddy. A creator is required. Product public names are unique, BamBuddy folders use `<creator>/<product name>`, and BamBuddy tags are replaced exactly with the product's PMP tags. Older BamBuddy files are intentionally retained.
+
+Source files are never overwritten. Each product has one current processed artifact and one current print-ready artifact. Replacing the global P2S reference automatically changes the profiles available to subsequent processing runs.
 
 ## Architecture Notes
 
@@ -201,6 +219,7 @@ Edit `.env.production`:
   - `ghcr.io/your-owner/your-repo:dev` for dev deployments
   - `ghcr.io/your-owner/your-repo:main` for main deployments
 - keep `DATABASE_URL` in sync with the same password
+- set `PMP_FILE_STORAGE_HOST_PATH` to a durable Unraid share for source, processed, print-ready, and P2S reference files
 
 ### 3) Start The Stack
 
@@ -245,6 +264,9 @@ Back up both:
 
 - PostgreSQL volume (`print_portal_postgres`)
 - upload files volume (`print_portal_uploads`)
+- private PMP file directory (`PMP_FILE_STORAGE_HOST_PATH`, for example `/mnt/user/3d-print-files/pmp`)
+
+The database and private PMP directory should be backed up as one consistent set: the database stores hashes and opaque storage keys while the directory contains the corresponding file bytes.
 
 Minimal Postgres dump example:
 

@@ -7,6 +7,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { humanizeEnum, productStatusOptions, shopifyCategoryTagOptions } from "@/lib/domain";
 import { localProductImageStorage } from "@/server/storage/local-storage-service";
+import { privateFileStorage } from "@/server/storage/private-file-storage";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/server/auth/mock-auth-provider";
@@ -53,6 +54,7 @@ import {
   updateProductCategories,
   updatePublicAppUrl,
   updateBambuBuddyBaseUrl,
+  updateFileWorkflowLimits,
   updateDefaultFilamentSpoolCost,
   updateProcessingEstimateSettings,
   updateAppVersion,
@@ -113,6 +115,7 @@ import {
   bambuBuddyApiKeySchema,
   bambuBuddyFilamentMappingSchema,
   defaultFilamentSpoolCostSchema,
+  fileWorkflowLimitsSchema,
   queueCreateSchema,
   queueBulkActionSchema,
   queueUpdateSchema,
@@ -177,12 +180,17 @@ export async function createProductAction(formData: FormData) {
   try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
-  const product = await createProduct({
-    ...parsed.data,
-    internalName: parsed.data.name,
-    publicName: parsed.data.name,
-    shortDescription: parsed.data.fullDescription.slice(0, 180),
-  });
+  let product;
+  try {
+    product = await createProduct({
+      ...parsed.data,
+      internalName: parsed.data.name,
+      publicName: parsed.data.name,
+      shortDescription: parsed.data.fullDescription.slice(0, 180),
+    });
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to create product."));
+  }
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
   redirect(appendStatus(`/admin/products/${product.id}`, "success", "Product created."));
@@ -426,12 +434,16 @@ export async function updateProductAction(formData: FormData) {
   try { await ensurePricingTierForCategory(parsed.data.pricingTierId, parsed.data.category); }
   catch (error) { redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Invalid pricing tier.")); }
 
-  await updateProduct(productId, {
-    ...parsed.data,
-    internalName: parsed.data.name,
-    publicName: parsed.data.name,
-    shortDescription: parsed.data.fullDescription.slice(0, 180),
-  });
+  try {
+    await updateProduct(productId, {
+      ...parsed.data,
+      internalName: parsed.data.name,
+      publicName: parsed.data.name,
+      shortDescription: parsed.data.fullDescription.slice(0, 180),
+    });
+  } catch (error) {
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save product."));
+  }
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
   revalidatePath("/catalog");
@@ -452,12 +464,13 @@ export async function deleteProductAction(formData: FormData) {
   }
 
   try {
-    const { deletedImagePaths, deletedQueueCount, deletedRequestCount } = await deleteProduct(productId, {
+    const { deletedImagePaths, deletedPrivateStorageKeys, deletedQueueCount, deletedRequestCount } = await deleteProduct(productId, {
       force: confirmWord === "delete",
     });
     await Promise.all(
       deletedImagePaths.map((imagePath) => localProductImageStorage.deleteProductImage(imagePath)),
     );
+    await Promise.allSettled(deletedPrivateStorageKeys.map((storageKey) => privateFileStorage.delete(storageKey)));
 
     revalidatePath("/admin/products");
     revalidatePath("/catalog");
@@ -1514,6 +1527,16 @@ export async function updateBambuBuddyBaseUrlAction(formData: FormData) {
   redirect(appendStatus(redirectTo, "success", "BambuBuddy URL saved."));
 }
 
+export async function updateFileWorkflowLimitsAction(formData: FormData) {
+  await requireRole("ADMIN");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
+  const parsed = fileWorkflowLimitsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
+  await updateFileWorkflowLimits(parsed.data);
+  revalidatePath("/admin/settings");
+  redirect(appendStatus(redirectTo, "success", "Product file limits saved."));
+}
+
 export async function saveBambuBuddyApiKeyAction(formData: FormData) {
   await requireRole("ADMIN");
   const redirectTo = String(formData.get("redirectTo") ?? "/admin/settings?tab=integrations");
@@ -1817,10 +1840,11 @@ export async function deleteAllProductsAction(formData: FormData) {
   }
 
   try {
-    const { deletedImagePaths, deletedProductCount, deletedQueueCount, deletedRequestCount } = await deleteAllProducts();
+    const { deletedImagePaths, deletedPrivateStorageKeys, deletedProductCount, deletedQueueCount, deletedRequestCount } = await deleteAllProducts();
     await Promise.all(
       deletedImagePaths.map((imagePath) => localProductImageStorage.deleteProductImage(imagePath)),
     );
+    await Promise.allSettled(deletedPrivateStorageKeys.map((storageKey) => privateFileStorage.delete(storageKey)));
 
     revalidatePath("/admin");
     revalidatePath("/admin/settings");
