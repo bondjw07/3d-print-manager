@@ -6,6 +6,9 @@ services:
     pull_policy: always
     env_file:
       - .env.production
+    environment:
+      # Keep private product artifacts outside the disposable container layer.
+      PMP_FILE_STORAGE_ROOT: /data/pmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -14,7 +17,7 @@ services:
     volumes:
       - print_portal_uploads:/app/uploads
       - print_portal_uploads:/app/public/uploads
-      - ${PMP_FILE_STORAGE_HOST_PATH:-./pmp-files}:/data/pmp
+      - ${PMP_FILE_STORAGE_HOST_PATH:-/mnt/user/appdata/print-portal/files}:/data/pmp
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
