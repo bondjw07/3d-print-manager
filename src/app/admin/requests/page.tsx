@@ -182,7 +182,7 @@ function stageBadgeClassName(stageKey: RequestStageKey) {
 
 function getRequestStockSummary(request: AdminRequest): RequestStockSummary {
   if (request.product.bambuBuddyFilamentRequirements.length > 0) {
-    return { state: "UNKNOWN", requiredTotalGrams: null, missingTotalGrams: null, detail: "Filament stock is managed in BambuBuddy.", detailLines: [] };
+    return { state: "UNKNOWN", requiredTotalGrams: null, missingTotalGrams: null, detail: "Filament stock is managed in BamBuddy.", detailLines: [] };
   }
   const requirements = request.product.filamentRequirements;
   if (requirements.length === 0) {

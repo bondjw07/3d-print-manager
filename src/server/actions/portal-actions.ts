@@ -288,10 +288,10 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
   const bambuBuddyApiKey = await getBambuBuddyApiKey();
 
   if (!productId || !fileId) {
-    redirect(appendStatus(redirectTo, "error", "A BambuBuddy file ID is required."));
+    redirect(appendStatus(redirectTo, "error", "A BamBuddy file ID is required."));
   }
   if (!bambuBuddyBaseUrl) {
-    redirect(appendStatus(redirectTo, "error", "Set the BambuBuddy URL in Admin Settings before importing data."));
+    redirect(appendStatus(redirectTo, "error", "Set the BamBuddy URL in Admin Settings before importing data."));
   }
 
   let printTimeSeconds: number | undefined;
@@ -302,7 +302,7 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
       cache: "no-store",
     });
     if (!response.ok) {
-      throw new Error(`BambuBuddy returned ${response.status}.`);
+      throw new Error(`BamBuddy returned ${response.status}.`);
     }
 
     const payload = await response.json() as {
@@ -324,13 +324,13 @@ export async function importBambuBuddyProductDataAction(formData: FormData) {
     await updateBambuBuddyProductData({ productId, fileId, printTimeSeconds, filamentUsedGrams, filamentRequirements: [...groupedRequirements.values()] });
   } catch (error) {
     rethrowNextRedirect(error);
-    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "BambuBuddy import failed."));
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "BamBuddy import failed."));
   }
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
   const importedFields = [printTimeSeconds !== undefined ? "print time" : null, filamentUsedGrams !== undefined ? "filament usage" : null].filter(Boolean);
-  redirect(appendStatus(redirectTo, "success", importedFields.length > 0 ? `Imported BambuBuddy ${importedFields.join(" and ")}.` : "BambuBuddy file imported, but it did not include print time or filament usage."));
+  redirect(appendStatus(redirectTo, "success", importedFields.length > 0 ? `Imported BamBuddy ${importedFields.join(" and ")}.` : "BamBuddy file imported, but it did not include print time or filament usage."));
 }
 
 export async function bulkImportProductsFromUrlsAction(formData: FormData) {
@@ -1524,7 +1524,7 @@ export async function updateBambuBuddyBaseUrlAction(formData: FormData) {
   if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   await updateBambuBuddyBaseUrl(parsed.data.bambuBuddyBaseUrl);
   revalidatePath("/admin/settings");
-  redirect(appendStatus(redirectTo, "success", "BambuBuddy URL saved."));
+  redirect(appendStatus(redirectTo, "success", "BamBuddy URL saved."));
 }
 
 export async function updateFileWorkflowLimitsAction(formData: FormData) {
@@ -1544,7 +1544,7 @@ export async function saveBambuBuddyApiKeyAction(formData: FormData) {
   if (!parsed.success) redirect(appendStatus(redirectTo, "error", firstIssueMessage(parsed.error)));
   await saveBambuBuddyApiKey(parsed.data.bambuBuddyApiKey);
   revalidatePath("/admin/settings");
-  redirect(appendStatus(redirectTo, "success", "BambuBuddy API key saved."));
+  redirect(appendStatus(redirectTo, "success", "BamBuddy API key saved."));
 }
 
 export async function saveBambuBuddyFilamentMappingAction(formData: FormData) {
@@ -1555,11 +1555,11 @@ export async function saveBambuBuddyFilamentMappingAction(formData: FormData) {
   try {
     await upsertBambuBuddyFilamentMapping(parsed.data);
   } catch (error) {
-    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save BambuBuddy mapping."));
+    redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to save BamBuddy mapping."));
   }
   revalidatePath("/admin/settings");
   revalidatePath("/admin/products");
-  redirect(appendStatus(redirectTo, "success", "BambuBuddy filament mapping saved."));
+  redirect(appendStatus(redirectTo, "success", "BamBuddy filament mapping saved."));
 }
 
 function deriveBambuBuddyMaterialType(material: string, suppliedType: string) {
@@ -1622,7 +1622,7 @@ export async function importBambuBuddyFilamentMappingsAction(formData: FormData)
     if (!imported) throw new Error("No valid mapping rows were found.");
     revalidatePath("/admin/settings");
     revalidatePath("/admin/products");
-    redirect(appendStatus(redirectTo, "success", `Imported or updated ${imported} BambuBuddy mapping${imported === 1 ? "" : "s"}.`));
+    redirect(appendStatus(redirectTo, "success", `Imported or updated ${imported} BamBuddy mapping${imported === 1 ? "" : "s"}.`));
   } catch (error) {
     rethrowNextRedirect(error);
     redirect(appendStatus(redirectTo, "error", error instanceof Error ? error.message : "Unable to import mappings."));

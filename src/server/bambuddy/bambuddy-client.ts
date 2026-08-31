@@ -49,7 +49,7 @@ export class BambuBuddyClient {
         const payload = await response.json() as { detail?: unknown };
         if (typeof payload.detail === "string") detail = `: ${payload.detail}`;
       } catch {}
-      throw new BambuBuddyApiError(`BambuBuddy returned ${response.status}${detail}`, response.status);
+      throw new BambuBuddyApiError(`BamBuddy returned ${response.status}${detail}`, response.status);
     }
     return response.json() as Promise<T>;
   }
@@ -109,7 +109,7 @@ export class BambuBuddyClient {
 
 export function normalizeBambuBuddyFolderName(value: string) {
   const normalized = value.replace(/[\\/]+/g, " - ").replace(/[\u0000-\u001F\u007F]/g, "").trim();
-  if (!normalized) throw new Error("BambuBuddy folder name cannot be empty.");
+  if (!normalized) throw new Error("BamBuddy folder name cannot be empty.");
   return normalized.slice(0, 255);
 }
 
@@ -143,6 +143,6 @@ export async function resolveBambuBuddyFolderHierarchy(client: BambuBuddyClient,
     }
     parentId = folder.id;
   }
-  if (parentId === null) throw new Error("Unable to resolve a BambuBuddy folder.");
+  if (parentId === null) throw new Error("Unable to resolve a BamBuddy folder.");
   return parentId;
 }

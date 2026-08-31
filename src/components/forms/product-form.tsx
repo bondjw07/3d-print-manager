@@ -168,7 +168,7 @@ export function ProductForm({
       <section className="grid gap-4 rounded-xl border border-slate-200 bg-surface-muted p-4 sm:col-span-2 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <h2 className="font-semibold text-slate-900">Print specifications</h2>
-          <p className="text-sm text-slate-500">Physical measurements, packaging, and the linked BambuBuddy print file.</p>
+          <p className="text-sm text-slate-500">Physical measurements, packaging, and the linked BamBuddy print file.</p>
         </div>
       <div className="grid grid-cols-3 gap-2 sm:col-span-2">
         <div>
@@ -211,7 +211,7 @@ export function ProductForm({
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="bambuBuddyFileId">
-          BambuBuddy file ID
+          BamBuddy file ID
         </label>
         <div className="flex gap-2">
           <Input id="bambuBuddyFileId" name="bambuBuddyFileId" defaultValue={product?.bambuBuddyFileId ?? ""} />
@@ -219,7 +219,7 @@ export function ProductForm({
         </div>
       </div>
       {product?.bambuBuddyLastSyncedAt ? <div className="rounded-lg border border-slate-200 bg-surface-muted p-3 text-sm sm:col-span-2">
-        <p className="font-medium text-slate-800">Imported BambuBuddy data</p>
+        <p className="font-medium text-slate-800">Imported BamBuddy data</p>
         <dl className="mt-2 grid gap-2 text-slate-600 sm:grid-cols-3">
           <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Print time</dt><dd>{product.bambuBuddyPrintTimeSeconds === null ? "Not provided" : formatPrintDuration(product.bambuBuddyPrintTimeSeconds)}</dd></div>
           <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Filament used</dt><dd>{product.bambuBuddyFilamentUsedGrams === null ? "Not provided" : `${product.bambuBuddyFilamentUsedGrams.toString()} g`}</dd></div>

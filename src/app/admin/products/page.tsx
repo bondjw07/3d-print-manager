@@ -32,6 +32,19 @@ function formatPrintDuration(totalSeconds: number | null) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+function getBambuBuddyFileManagerUrl(baseUrl: string | null) {
+  if (!baseUrl?.trim()) return null;
+
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/files`;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminProductsPage({
   searchParams,
 }: {
@@ -181,7 +194,7 @@ export default async function AdminProductsPage({
                     </Select>
                   </label>
                   <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    BambuBuddy file
+                    BamBuddy file
                     <Select name="bambuBuddy" defaultValue={bambuBuddy}>
                       <option value="">All products</option>
                       <option value="linked">Linked</option>
@@ -367,15 +380,13 @@ export default async function AdminProductsPage({
                       </Link>
                     </td>
                     <td className="px-0 py-0">
-                      <Link className="block px-2 py-3" href={productDetailHref(product.id)}>
-                        <div className="flex items-center gap-1.5"><p className="font-medium text-slate-900 hover:underline">{product.publicName}</p>{product.bambuBuddyFileId?.trim() ? <HoverInfo content={<><p className="font-semibold text-slate-900">BambuBuddy file linked</p><dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600"><dt>Print time</dt><dd>{formatPrintDuration(product.bambuBuddyPrintTimeSeconds)}</dd><dt>Filament</dt><dd>{product.bambuBuddyFilamentUsedGrams === null ? "Not provided" : `${product.bambuBuddyFilamentUsedGrams.toString()} g`}</dd><dt>Est. cost</dt><dd>{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }); return estimate.calculatedCost === null ? "Not available" : formatCurrency(estimate.calculatedCost); })()}</dd></dl></>}><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-600" aria-label="BambuBuddy file linked"><Paperclip className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}</div>
+                      <div className="px-2 py-3">
+                        <div className="flex items-center gap-1.5"><Link href={productDetailHref(product.id)} className="font-medium text-slate-900 hover:underline">{product.publicName}</Link>{product.bambuBuddyFileId?.trim() ? <HoverInfo content={<><p className="font-semibold text-slate-900">BamBuddy file linked</p><dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600"><dt>Print time</dt><dd>{formatPrintDuration(product.bambuBuddyPrintTimeSeconds)}</dd><dt>Filament</dt><dd>{product.bambuBuddyFilamentUsedGrams === null ? "Not provided" : `${product.bambuBuddyFilamentUsedGrams.toString()} g`}</dd><dt>Est. cost</dt><dd>{(() => { const estimate = calculateRequestEstimate({ quantity: 1, filamentScalePercent: 100, product: { ...product, defaultFilamentSpoolCost: settings.defaultFilamentSpoolCost } }); return estimate.calculatedCost === null ? "Not available" : formatCurrency(estimate.calculatedCost); })()}</dd></dl></>}>{getBambuBuddyFileManagerUrl(settings.bambuBuddyBaseUrl) ? <a href={getBambuBuddyFileManagerUrl(settings.bambuBuddyBaseUrl)!} target="_blank" rel="noreferrer" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100" aria-label="Open BamBuddy file in a new tab"><Paperclip className="h-3 w-3" aria-hidden /></a> : <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-600" aria-label="BamBuddy file linked"><Paperclip className="h-3 w-3" aria-hidden /></span>}</HoverInfo> : null}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs"><span className="text-slate-500">{product.internalName}</span><HoverInfo content={<><p className="font-semibold text-slate-900">Category</p><p className="mt-0.5 text-slate-600">{product.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-600" aria-label={`Category: ${product.category}`}><Folder className="h-3 w-3" aria-hidden /></span></HoverInfo>{product.pricingTier ? <HoverInfo content={<><p className="font-semibold text-slate-900">{product.pricingTier.label}</p><p className="mt-0.5 text-slate-600">Suggested listing price: {formatCurrency(Number(product.pricingTier.suggestedPrice))}</p><p className="mt-0.5 text-slate-500">{product.pricingTier.category}</p></>}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700" aria-label={`Pricing tier: ${product.pricingTier.label}`}><DollarSign className="h-3 w-3" aria-hidden /></span></HoverInfo> : null}{product.tags.map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>)}</div>
-                      </Link>
+                      </div>
                     </td>
                     <td className="px-0 py-0">
-                      <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">
-                        {product.sku}
-                      </Link>
+                      {product.importSourceCreatorUrl?.trim() ? <a href={product.importSourceCreatorUrl} target="_blank" rel="noreferrer" className="block px-2 py-3 text-sm text-slate-600 hover:underline">{product.sku}</a> : <Link href={productDetailHref(product.id)} className="block px-2 py-3 text-sm text-slate-600">{product.sku}</Link>}
                     </td>
                     <td className="px-0 py-0">
                       <Link href={productDetailHref(product.id)} className="block px-2 py-3">

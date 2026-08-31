@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildBambuBuddyGcodeFileName, chooseBambuBuddyGcodeFileName } from "./bambuddy-file-name";
 
-test("BambuBuddy G-code names contain product name and date without a hash or time", () => {
+test("BamBuddy G-code names contain product name and date without a hash or time", () => {
   assert.equal(
     buildBambuBuddyGcodeFileName("Chunky Jessie", new Date("2026-08-31T23:59:59.000Z")),
     "Chunky Jessie_2026-08-31.gcode.3mf",

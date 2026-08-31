@@ -61,9 +61,9 @@ async function syncTags(client: BambuBuddyClient, fileId: number, productTags: s
   }
   tags = await client.listTags();
   const tagIds = desiredNames.map((name) => tags.find((tag) => tag.name.localeCompare(name, undefined, { sensitivity: "base" }) === 0)?.id);
-  if (tagIds.some((id) => id === undefined)) throw new Error("BambuBuddy did not return one or more newly created tags.");
+  if (tagIds.some((id) => id === undefined)) throw new Error("BamBuddy did not return one or more newly created tags.");
   const result = await client.replaceFileTags(fileId, tagIds as number[]);
-  if (result.files_updated !== 1) throw new Error("BambuBuddy did not update tags for the published file.");
+  if (result.files_updated !== 1) throw new Error("BamBuddy did not update tags for the published file.");
 }
 
 export async function publishProductPrintReadyFile(productId: string) {
@@ -81,7 +81,7 @@ export async function publishProductPrintReadyFile(productId: string) {
   }
   const creator = product.importSourceCreatorName?.trim();
   if (!creator) throw new Error("Assign a creator to this Product before publishing to BamBuddy.");
-  if (!settings.bambuBuddyBaseUrl) throw new Error("Configure the BambuBuddy URL in Admin Settings.");
+  if (!settings.bambuBuddyBaseUrl) throw new Error("Configure the BamBuddy URL in Admin Settings.");
 
   await prisma.productArtifact.update({ where: { id: artifact.id }, data: { lastPublishAttemptAt: new Date(), lastPublishError: null } });
   const client = new BambuBuddyClient(settings.bambuBuddyBaseUrl, apiKey);
@@ -110,7 +110,7 @@ export async function publishProductPrintReadyFile(productId: string) {
       }
       const existing = folderFiles.find((file) => file.filename === fileName);
       if (existing && existing.file_size !== Number(artifact.sizeBytes)) {
-        throw new Error(`BambuBuddy already contains ${fileName} with a different size. Resolve that collision before retrying.`);
+        throw new Error(`BamBuddy already contains ${fileName} with a different size. Resolve that collision before retrying.`);
       }
       fileId = existing?.id ?? (await client.uploadFile(folderId, resolvePrivateStoragePath(artifact.storageKey), fileName)).id;
     }
@@ -133,7 +133,7 @@ export async function publishProductPrintReadyFile(productId: string) {
     });
     return { fileId, fileName: fileName ?? linkedFile?.filename ?? null };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "BambuBuddy publish failed.";
+    const message = error instanceof Error ? error.message : "BamBuddy publish failed.";
     await prisma.productArtifact.update({ where: { id: artifact.id }, data: { lastPublishError: message, lastPublishAttemptAt: new Date() } });
     throw error;
   }

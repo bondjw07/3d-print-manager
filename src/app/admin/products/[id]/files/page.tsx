@@ -94,7 +94,7 @@ export default async function ProductFilesPage({ params, searchParams }: { param
                   : undefined
             }
           />
-          {product.bambuBuddyFileId ? <p className="text-xs text-slate-500">Current BambuBuddy File ID: {product.bambuBuddyFileId}{printReady.bambuBuddyTagsSyncedAt ? ` · Tags synced ${printReady.bambuBuddyTagsSyncedAt.toLocaleString()}` : ""}</p> : null}
+          {product.bambuBuddyFileId ? <p className="text-xs text-slate-500">Current BamBuddy File ID: {product.bambuBuddyFileId}{printReady.bambuBuddyTagsSyncedAt ? ` · Tags synced ${printReady.bambuBuddyTagsSyncedAt.toLocaleString()}` : ""}</p> : null}
         </div> : null}
       </CardContent>
     </Card>

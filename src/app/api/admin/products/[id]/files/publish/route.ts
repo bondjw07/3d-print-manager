@@ -16,6 +16,6 @@ export async function POST(_request: Request, context: RouteContext<"/api/admin/
     revalidatePath("/admin/products");
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "BambuBuddy publish failed." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "BamBuddy publish failed." }, { status: 400 });
   }
 }

@@ -432,11 +432,11 @@ export default async function ProductDetailAdminPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>BambuBuddy Filament Requirements</CardTitle>
-              <CardDescription>Updated from the linked BambuBuddy file. Matching colors are grouped by material type and hex value.</CardDescription>
+              <CardTitle>BamBuddy Filament Requirements</CardTitle>
+              <CardDescription>Updated from the linked BamBuddy file. Matching colors are grouped by material type and hex value.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {product.bambuBuddyFilamentRequirements.length === 0 ? <p className="text-sm text-slate-500">Import the linked BambuBuddy file to populate requirements.</p> : <div className="space-y-2">
+              {product.bambuBuddyFilamentRequirements.length === 0 ? <p className="text-sm text-slate-500">Import the linked BamBuddy file to populate requirements.</p> : <div className="space-y-2">
                 {product.bambuBuddyFilamentRequirements.map((requirement) => <div key={requirement.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm">
                   <div className="flex min-w-0 items-center gap-2"><span className="h-4 w-4 shrink-0 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: requirement.hexColor }} title={requirement.hexColor} /><p className="min-w-0 font-medium text-slate-900">{bambuBuddyMappingNames.get(`${requirement.materialType}:${requirement.hexColor}`) ?? `${requirement.materialType} ${requirement.hexColor}`} <span className="font-mono text-xs text-slate-500">{requirement.hexColor}</span></p></div>
                   <p className="text-slate-600">{requirement.estimatedGramsPerPrint.toString()} g per print</p>

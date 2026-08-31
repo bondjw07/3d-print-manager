@@ -91,8 +91,8 @@ export function calculateRequestFilamentWeightBreakdown(input: RequestEstimateIn
       totalWeightGrams: roundToTwo(Math.max(0, toFiniteNumber(requirement.estimatedGramsPerPrint) ?? 0) * quantity * filamentScaleMultiplier),
     })).filter((entry) => entry.totalWeightGrams > 0);
     return entries.length > 0
-      ? { totalWeightGrams: roundToTwo(entries.reduce((sum, entry) => sum + entry.totalWeightGrams, 0)), entries, detail: "BambuBuddy per-filament estimate." }
-      : { totalWeightGrams: null, entries: [], detail: "BambuBuddy requirements are missing grams." };
+      ? { totalWeightGrams: roundToTwo(entries.reduce((sum, entry) => sum + entry.totalWeightGrams, 0)), entries, detail: "BamBuddy per-filament estimate." }
+      : { totalWeightGrams: null, entries: [], detail: "BamBuddy requirements are missing grams." };
   }
   const filamentTotals = new Map<string, number>();
   let missingEstimateCount = 0;

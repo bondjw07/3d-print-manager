@@ -439,12 +439,12 @@ export const publicAppUrlSchema = z.object({
 
 export const bambuBuddyBaseUrlSchema = z.object({
   bambuBuddyBaseUrl: z
-    .url("Enter a valid BambuBuddy URL.")
+    .url("Enter a valid BamBuddy URL.")
     .transform((value) => value.replace(/\/+$/, "")),
 });
 
 export const bambuBuddyApiKeySchema = z.object({
-  bambuBuddyApiKey: z.string().trim().min(1, "BambuBuddy API key is required.").max(512),
+  bambuBuddyApiKey: z.string().trim().min(1, "BamBuddy API key is required.").max(512),
 });
 
 export const bambuBuddyFilamentMappingSchema = z.object({

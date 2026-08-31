@@ -115,27 +115,27 @@ export default async function AdminSettingsPage({
 
       <Card className={tab === "integrations" ? "" : "hidden"}>
         <CardHeader>
-          <CardTitle>BambuBuddy</CardTitle>
+          <CardTitle>BamBuddy</CardTitle>
           <CardDescription>Set the base URL used to import file details into products.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid max-w-xl gap-5">
             <form action={updateBambuBuddyBaseUrlAction} className="grid gap-3">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
-              <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy URL<Input name="bambuBuddyBaseUrl" type="url" defaultValue={settings.bambuBuddyBaseUrl ?? ""} placeholder="http://bambuddy.local" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">BamBuddy URL<Input name="bambuBuddyBaseUrl" type="url" defaultValue={settings.bambuBuddyBaseUrl ?? ""} placeholder="http://bambuddy.local" required /></label>
               <p className="text-xs text-slate-500">Use the address reachable by this app&apos;s server, without the API path.</p>
-              <Button type="submit" className="w-fit">Save BambuBuddy URL</Button>
+              <Button type="submit" className="w-fit">Save BamBuddy URL</Button>
             </form>
             <form action={saveBambuBuddyApiKeyAction} className="grid gap-3 border-t border-slate-200 pt-5">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
-              <label className="grid gap-1 text-sm font-medium text-slate-800">API key<Input name="bambuBuddyApiKey" type="password" placeholder={settings.bambuBuddyApiKeyEncrypted ? "Configured — enter a new key to replace it" : "BambuBuddy API key"} autoComplete="new-password" required /></label>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">API key<Input name="bambuBuddyApiKey" type="password" placeholder={settings.bambuBuddyApiKeyEncrypted ? "Configured — enter a new key to replace it" : "BamBuddy API key"} autoComplete="new-password" required /></label>
               <p className="text-xs text-slate-500">Stored encrypted and sent as the <code>X-API-Key</code> header when importing file data. {settings.bambuBuddyApiKeyEncrypted ? "An API key is configured." : "No API key is configured."}</p>
               <Button type="submit" className="w-fit">Save API Key</Button>
             </form>
             <form action={updateDefaultFilamentSpoolCostAction} className="grid gap-3 border-t border-slate-200 pt-5">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
               <label className="grid gap-1 text-sm font-medium text-slate-800">Default 1 kg spool cost<Input name="defaultFilamentSpoolCost" type="number" min="0" step="0.01" defaultValue={settings.defaultFilamentSpoolCost.toString()} required /></label>
-              <p className="text-xs text-slate-500">Used to estimate material cost for products with BambuBuddy requirements. Legacy filament costs remain only as a fallback for products that have not been imported.</p>
+              <p className="text-xs text-slate-500">Used to estimate material cost for products with BamBuddy requirements. Legacy filament costs remain only as a fallback for products that have not been imported.</p>
               <Button type="submit" className="w-fit">Save Default Spool Cost</Button>
             </form>
             <form action={updateFileWorkflowLimitsAction} className="grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2">
@@ -164,8 +164,8 @@ export default async function AdminSettingsPage({
             <form action={importBambuBuddyFilamentMappingsAction} className="grid gap-3 border-t border-slate-200 pt-5">
               <input type="hidden" name="redirectTo" value="/admin/settings?tab=integrations" />
               <label className="grid gap-1 text-sm font-medium text-slate-800">Import color mappings CSV<Input name="mappingFile" type="file" accept="text/csv,.csv,application/json,.json" required /></label>
-              <label className="grid gap-1 text-sm font-medium text-slate-800">BambuBuddy material type (optional)<Input name="materialType" placeholder="PLA" /></label>
-              <p className="text-xs text-slate-500">Use CSV columns Type, Sub Type, Color Name, and Hex Color. Rows are upserted by BambuBuddy material type and hex color; subtype is retained as descriptive metadata.</p>
+              <label className="grid gap-1 text-sm font-medium text-slate-800">BamBuddy material type (optional)<Input name="materialType" placeholder="PLA" /></label>
+              <p className="text-xs text-slate-500">Use CSV columns Type, Sub Type, Color Name, and Hex Color. Rows are upserted by BamBuddy material type and hex color; subtype is retained as descriptive metadata.</p>
               <Button type="submit" className="w-fit" variant="secondary">Import Mappings</Button>
             </form>
             <form action={saveBambuBuddyFilamentMappingAction} className="grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2">
@@ -724,14 +724,14 @@ export default async function AdminSettingsPage({
           <div className="rounded-xl border border-border bg-surface-muted p-4">
             <p className="text-sm font-semibold text-rose-800">Delete Legacy Local Filaments</p>
             <p className="mt-1 text-sm text-slate-600">
-              Permanently deletes legacy local-filament data and linked legacy product requirements. BambuBuddy mappings and requirements are not affected. This action cannot be undone.
+              Permanently deletes legacy local-filament data and linked legacy product requirements. BamBuddy mappings and requirements are not affected. This action cannot be undone.
             </p>
             <form action={deleteAllFilamentsAction} className="mt-3">
               <input type="hidden" name="redirectTo" value="/admin/settings" />
               <ConfirmSubmitModalButton
                 variant="danger"
                 confirmTitle="Delete Legacy Local Filaments?"
-                confirmMessage="This will permanently delete every legacy local filament and its linked legacy product requirements. BambuBuddy data is not affected. This cannot be undone."
+                confirmMessage="This will permanently delete every legacy local filament and its linked legacy product requirements. BamBuddy data is not affected. This cannot be undone."
                 confirmLabel="Yes, Delete Legacy Filaments"
                 confirmationKeyword="delete"
                 confirmationInputName="confirmWord"

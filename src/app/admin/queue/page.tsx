@@ -108,7 +108,7 @@ function stockAlertBadgeClassName(state: QueueFilamentStockState) {
 
 function getQueueFilamentStockAlert(item: AdminQueueItem): QueueFilamentStockAlert {
   if (item.product.bambuBuddyFilamentRequirements.length > 0) {
-    return { state: "UNKNOWN", missingTotalGrams: null, detail: "Filament stock is managed in BambuBuddy.", detailLines: [] };
+    return { state: "UNKNOWN", missingTotalGrams: null, detail: "Filament stock is managed in BamBuddy.", detailLines: [] };
   }
   const requirements = item.product.filamentRequirements;
 
