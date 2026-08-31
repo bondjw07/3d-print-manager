@@ -49,5 +49,6 @@ COPY --from=builder /app ./
 
 EXPOSE 3000
 
-# Apply DB migrations at startup, then launch Next.js.
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+# Apply DB migrations at startup, including the guarded recovery for the known
+# duplicate-public-name migration failure, then launch Next.js.
+CMD ["sh", "/app/scripts/production-migrate.sh"]

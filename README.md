@@ -231,6 +231,11 @@ docker compose --env-file .env.production -f docker-compose.unraid.yml up -d
 
 The app starts on port `APP_PORT` (default `3000`).
 
+The container applies Prisma migrations at startup. For the known legacy
+duplicate-product-name recovery, the deployment package automatically marks
+only `20260830000005_add_product_file_workflow` as rolled back and retries it;
+all unrelated migration failures keep the container stopped for review.
+
 ### 4) Seed Demo Data (Optional, First Run)
 
 ```bash
