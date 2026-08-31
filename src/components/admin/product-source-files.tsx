@@ -99,7 +99,7 @@ export function ProductSourceFiles({ productId, sourceFiles }: { productId: stri
               {sourceFile.packageManifest?.kind === "ZIP" ? <p className="mt-1 text-xs text-slate-500">ZIP package · {sourceFile.packageManifest.entryCount ?? 0} entries</p> : null}
             </div>
             <div className="flex gap-2">
-              <Link href={`/api/admin/products/${productId}/files/source/${sourceFile.id}/download`}><Button size="sm" type="button" variant="secondary">Download</Button></Link>
+              <Link prefetch={false} href={`/api/admin/products/${productId}/files/source/${sourceFile.id}/download`}><Button size="sm" type="button" variant="secondary">Download</Button></Link>
               <Button size="sm" type="button" variant="ghost" disabled={isPending} onClick={() => {
                 if (!window.confirm(`Permanently delete ${sourceFile.originalName}?`)) return;
                 setError(null);

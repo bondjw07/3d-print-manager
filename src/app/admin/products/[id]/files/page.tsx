@@ -65,7 +65,7 @@ export default async function ProductFilesPage({ params, searchParams }: { param
         {processed ? <>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
             <div><p className="font-medium text-emerald-900">Processed 3MF ready</p><p className="mt-1 text-xs text-emerald-700">{processed.downloadName} · SHA-256 {processed.sha256.slice(0, 12)}…</p></div>
-            <Link href={`/api/admin/products/${product.id}/files/artifact/processed/download`}><Button>Download for Bambu Studio</Button></Link>
+            <Link prefetch={false} href={`/api/admin/products/${product.id}/files/artifact/processed/download`}><Button>Download for Bambu Studio</Button></Link>
           </div>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600"><li>Download and open the processed project in Bambu Studio.</li><li>Slice all plates.</li><li>Export a <code>.gcode.3mf</code> print-ready file.</li><li>Upload it below.</li></ol>
         </> : <p className="text-sm text-slate-500">Select a source 3MF above, review every mapping, and generate the processed project.</p>}
@@ -77,7 +77,7 @@ export default async function ProductFilesPage({ params, searchParams }: { param
       <CardContent className="space-y-4">
         {printReady ? <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm ${printReadyIsStale ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
           <div><p className="font-medium text-slate-900">{printReady.downloadName}</p><p className="mt-1 text-xs text-slate-600">SHA-256 {printReady.sha256.slice(0, 12)}… · {printReadyIsStale ? "Based on an older processed 3MF" : publishedIsCurrent ? "Published to BamBuddy" : "Ready to publish"}</p></div>
-          <Link href={`/api/admin/products/${product.id}/files/artifact/print-ready/download`}><Button size="sm" variant="secondary">Download</Button></Link>
+          <Link prefetch={false} href={`/api/admin/products/${product.id}/files/artifact/print-ready/download`}><Button size="sm" variant="secondary">Download</Button></Link>
         </div> : null}
         {processed ? <PrintReadyUpload productId={product.id} /> : <p className="text-sm text-slate-500">Generate the processed P2S 3MF before uploading a sliced file.</p>}
         {printReady ? <div className="space-y-2 border-t border-slate-200 pt-4">
