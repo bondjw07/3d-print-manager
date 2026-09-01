@@ -68,7 +68,7 @@ export default async function ProcessingQueuePage({ searchParams }: { searchPara
         <form action="/admin/products/processing" className="space-y-2">
           <div className="flex flex-wrap gap-2">
             <Input className="min-w-64 flex-1" name="q" defaultValue={filters.q ?? ""} placeholder="Search Product name or SKU" />
-            <DismissibleDetails defaultOpen={activeFilterCount > 0} className="group relative">
+            <DismissibleDetails className="group relative">
               <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
                 <SlidersHorizontal className="h-4 w-4" aria-hidden />
                 Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}

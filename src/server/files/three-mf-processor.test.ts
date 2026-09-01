@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import yauzl, { type Entry, type ZipFile } from "yauzl";
 import yazl from "yazl";
 import { inspectThreeMf, levenshteinDistance, normalizeMappingName, transformThreeMf } from "./three-mf-processor";
 import { readThreeMfEntries } from "./three-mf-archive";
@@ -48,6 +49,42 @@ async function createThreeMf(filePath: string) {
   await new Promise<void>((resolve, reject) => { writer.on("close", resolve); writer.on("error", reject); });
 }
 
+function openRawEntryStream(zipFile: ZipFile, entry: Entry) {
+  return new Promise<NodeJS.ReadableStream>((resolve, reject) => {
+    zipFile.openReadStream(entry, { decodeFileData: false }, (error, stream) => {
+      if (error || !stream) reject(error ?? new Error(`Unable to read ${entry.fileName}.`));
+      else resolve(stream);
+    });
+  });
+}
+
+function readRawArchiveEntries(filePath: string) {
+  return new Promise<Array<{ fileName: string; compressionMethod: number; compressedContents: Buffer }>>((resolve, reject) => {
+    yauzl.open(filePath, { lazyEntries: true, autoClose: true }, (openError, zipFile) => {
+      if (openError || !zipFile) {
+        reject(openError ?? new Error("Unable to open test archive."));
+        return;
+      }
+      const entries: Array<{ fileName: string; compressionMethod: number; compressedContents: Buffer }> = [];
+      zipFile.on("error", reject);
+      zipFile.on("entry", async (entry) => {
+        try {
+          const stream = await openRawEntryStream(zipFile, entry);
+          const chunks: Buffer[] = [];
+          for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          entries.push({ fileName: entry.fileName, compressionMethod: entry.compressionMethod, compressedContents: Buffer.concat(chunks) });
+          zipFile.readEntry();
+        } catch (error) {
+          zipFile.close();
+          reject(error);
+        }
+      });
+      zipFile.on("end", () => resolve(entries));
+      zipFile.readEntry();
+    });
+  });
+}
+
 test("mapping normalization matches the original utility rules", () => {
   assert.equal(normalizeMappingName("Fossil Grey"), "fossilgray");
   assert.equal(normalizeMappingName("Fóssil-gray!"), "fossilgray");
@@ -75,6 +112,7 @@ test("transformation replaces complete settings, remaps shared slots, and preser
     const input = path.join(directory, "input.3mf");
     const output = path.join(directory, "output.3mf");
     await createThreeMf(input);
+    const originalEntries = await readRawArchiveEntries(input);
     const summary = await transformThreeMf(input, output, {
       mappings,
       selections: { "1": "black", "2": "white" },
@@ -90,6 +128,15 @@ test("transformation replaces complete settings, remaps shared slots, and preser
     assert.deepEqual(settings.filament_colour.slice(0, 2), ["#2F2E30", "#F4EFEB"]);
     assert.match(entries.get("Metadata/model_settings.config")!.toString("utf8"), /value="2"/);
     assert.equal(entries.get("keep.txt")!.toString("utf8"), "unchanged");
+    const outputEntries = await readRawArchiveEntries(output);
+    assert.equal(outputEntries.filter((entry) => entry.fileName === "Metadata/model_settings.config").length, 1);
+    assert.equal(outputEntries.filter((entry) => entry.fileName === "Metadata/project_settings.config").length, 1);
+    assert.equal(outputEntries.find((entry) => entry.fileName === "Metadata/model_settings.config")?.compressionMethod, 0);
+    assert.equal(outputEntries.find((entry) => entry.fileName === "Metadata/project_settings.config")?.compressionMethod, 0);
+    assert.deepEqual(
+      outputEntries.find((entry) => entry.fileName === "keep.txt")?.compressedContents,
+      originalEntries.find((entry) => entry.fileName === "keep.txt")?.compressedContents,
+    );
     assert.ok((await readFile(output)).byteLength > 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
