@@ -17,11 +17,14 @@ export async function POST(request: Request) {
     }),
     getBambuBuddyCategoryTagMappings(),
   ]);
-  const rows = products.map((product) => {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const rows = productIds.flatMap((productId) => {
+    const product = productsById.get(productId);
+    if (!product) return [];
     const categoryTag = getBambuBuddyTagForProductCategory(product.category, categoryMappings);
     const printReady = product.artifacts.find((artifact) => artifact.kind === "PRINT_READY");
     const processed = product.artifacts.find((artifact) => artifact.kind === "PROCESSED_3MF");
-    return {
+    return [{
       id: product.id,
       publicName: product.publicName,
       creatorName: product.importSourceCreatorName,
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
       tags: categoryTag ? [...product.tags, categoryTag] : product.tags,
       categoryTag,
       valid: Boolean(printReady && processed && printReady.basedOnProcessedSha256 === processed.sha256 && product.importSourceCreatorName?.trim()),
-    };
+    }];
   });
   return NextResponse.json({ rows });
 }
