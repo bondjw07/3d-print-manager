@@ -13,7 +13,7 @@ import { readApiResponse } from "@/lib/api-response";
 import { PrintReadyBatchDialog } from "./print-ready-batch-dialog";
 import { BambuBuddyBatchDialog } from "./bambuddy-batch-dialog";
 
-type UploadProgress = { state: "queued" | "uploading" | "processing" | "complete" | "failed"; loaded: number; total: number; error?: string };
+type UploadProgress = { state: "queued" | "uploading" | "complete" | "failed"; loaded: number; total: number; error?: string };
 type QueueRow = Omit<ProcessingQueueRow, "latestJobId"> & { latestJobId: string | null };
 
 const stateTone = {
@@ -110,7 +110,7 @@ export function ProcessingQueueWorkbench({ initialRows, stateCounts }: { initial
   }, [rows, router]);
 
   const uploadedBytes = Array.from(uploads.values()).reduce((total, upload) => total + Math.min(upload.loaded, upload.total), 0);
-  const completedUploads = Array.from(uploads.values()).filter((upload) => upload.state === "processing" || upload.state === "complete").length;
+  const completedUploads = Array.from(uploads.values()).filter((upload) => upload.state === "complete").length;
   const failedUploads = Array.from(uploads.values()).filter((upload) => upload.state === "failed").length;
   const selectedRows = rows.filter((row) => selected.has(row.id));
   const selectedProcessed = selectedRows.filter((row) => row.state.key === "PROCESSED_READY" || row.state.key === "NEEDS_UPDATED_PRINT_READY");
@@ -142,7 +142,7 @@ export function ProcessingQueueWorkbench({ initialRows, stateCounts }: { initial
         setUploads((current) => new Map(current).set(productId, { state: "uploading", loaded: 0, total: file.size }));
         try {
           await uploadSource(productId, file, (loaded, total) => setUploads((current) => new Map(current).set(productId, { state: "uploading", loaded, total })));
-          setUploads((current) => new Map(current).set(productId, { state: "processing", loaded: file.size, total: file.size }));
+          setUploads((current) => new Map(current).set(productId, { state: "complete", loaded: file.size, total: file.size }));
           setStaged((current) => { const next = new Map(current); next.delete(productId); return next; });
         } catch (error) {
           setUploads((current) => new Map(current).set(productId, { state: "failed", loaded: 0, total: file.size, error: error instanceof Error ? error.message : "Upload failed." }));
@@ -199,7 +199,7 @@ export function ProcessingQueueWorkbench({ initialRows, stateCounts }: { initial
             <td className="px-3 py-3"><Link href={`/admin/products/${row.id}`} className="block">{row.image ? <div className="relative h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"><Image src={row.image.imagePath} alt={row.image.altText ?? row.publicName} fill className="object-cover" sizes="56px" /></div> : <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-[10px] text-slate-500">No Image</div>}</Link></td>
             <td className="px-3 py-3"><Link href={`/admin/products/${row.id}`} className="font-medium text-slate-900 hover:underline">{row.publicName}</Link><p className="mt-1 flex items-center gap-1 text-xs text-slate-500">{row.creatorProductUrl ? <a href={row.creatorProductUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap hover:text-sky-700 hover:underline" aria-label={`Open creator product page for ${row.publicName} in a new tab`}>{row.sku}<ExternalLink className="h-3 w-3" aria-hidden /></a> : <span className="whitespace-nowrap">{row.sku}</span>}<span>· {row.category}</span></p><div className="mt-1 flex max-w-sm flex-wrap gap-1">{row.tags.slice(0, 5).map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{tag}</span>)}</div></td>
             <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${stateTone[row.state.tone]}`}>{row.state.step ? `${row.state.step} · ` : row.state.key === "ERROR" ? "Error · " : row.state.key === "ATTENTION" ? "Attention · " : ""}{row.state.label}</span></td>
-            <td className="max-w-md px-3 py-3 text-xs text-slate-600">{upload ? <div><p className={upload.state === "failed" ? "text-rose-700" : "text-sky-700"}>{upload.state === "uploading" ? `Uploading ${Math.round((upload.loaded / Math.max(1, upload.total)) * 100)}%` : upload.state === "processing" ? "Upload complete · Processing archive" : upload.state === "failed" ? upload.error : upload.state}</p>{upload.state === "uploading" ? <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-sky-500" style={{ width: `${(upload.loaded / Math.max(1, upload.total)) * 100}%` }} /></div> : null}</div> : row.state.details}</td>
+            <td className="max-w-md px-3 py-3 text-xs text-slate-600">{upload && upload.state !== "complete" ? <div><p className={upload.state === "failed" ? "text-rose-700" : "text-sky-700"}>{upload.state === "uploading" ? `Uploading ${Math.round((upload.loaded / Math.max(1, upload.total)) * 100)}%` : upload.state === "failed" ? upload.error : "Waiting to upload"}</p>{upload.state === "uploading" ? <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-sky-500" style={{ width: `${(upload.loaded / Math.max(1, upload.total)) * 100}%` }} /></div> : null}</div> : row.state.details}</td>
             <td className="px-3 py-3">{row.state.action === "UPLOAD_SOURCE" ? <SourceDropzone file={staged.get(row.id)} disabled={batchRunning} onFile={(file) => setStaged((current) => new Map(current).set(row.id, file))} onRemove={() => setStaged((current) => { const next = new Map(current); next.delete(row.id); return next; })} /> : row.state.action === "REVIEW_MAPPING" ? reviewQuery ? <Link href={`/admin/products/${row.id}/files/process?${reviewQuery}`}><Button size="sm">Review Mapping</Button></Link> : <Button size="sm" disabled>Preparing Review…</Button> : row.state.action === "DOWNLOAD_PROCESSED" ? <div className="flex flex-wrap gap-2"><Link prefetch={false} href={`/api/admin/products/${row.id}/files/artifact/processed/download`}><Button size="sm">Download 3MF</Button></Link><PrintReadyBatchDialog productId={row.id} /></div> : row.state.action === "UPLOAD_PRINT_READY" ? <PrintReadyBatchDialog productId={row.id} /> : row.state.action === "PUBLISH" ? <BambuBuddyBatchDialog products={[{ id: row.id, publicName: row.publicName, printReadyName: row.printReady?.downloadName ?? "", tags: row.tags, creatorName: row.creatorName }]} compact /> : row.state.action === "RETRY" ? <Button size="sm" variant="secondary" onClick={() => void retry(row.latestJobId)}>Retry</Button> : <Link href={`/admin/products/${row.id}/files`}><Button size="sm" variant="secondary">{row.state.action === "RESOLVE" ? "Resolve" : "View Files"}</Button></Link>}</td>
           </tr>;
         })}</tbody>

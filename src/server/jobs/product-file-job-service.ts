@@ -1,6 +1,14 @@
 import { Prisma, type ProductFileJob, type ProductFileJobKind } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
+export const productFileJobLeaseMilliseconds = 10 * 60 * 1000;
+export const productFileJobHeartbeatMilliseconds = 60 * 1000;
+
+// Prisma DateTime columns are stored as UTC wall-clock values in PostgreSQL
+// TIMESTAMP columns. Keep raw SQL on that same convention even when the
+// database server's session timezone is not UTC.
+const databaseUtcNow = Prisma.sql`(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')`;
+
 export async function enqueueProductFileJob(input: {
   productId: string;
   sourceFileId?: string | null;
@@ -33,15 +41,14 @@ export async function enqueueProductFileJob(input: {
   }
 }
 
-export async function claimNextProductFileJob(workerId: string, leaseMilliseconds = 10 * 60 * 1000) {
-  const leaseExpiresAt = new Date(Date.now() + leaseMilliseconds);
+export async function claimNextProductFileJob(workerId: string, leaseMilliseconds = productFileJobLeaseMilliseconds) {
   const jobs = await prisma.$queryRaw<ProductFileJob[]>`
     WITH candidate AS (
       SELECT "id"
       FROM "ProductFileJob"
       WHERE (
-        ("status" = 'QUEUED' AND "availableAt" <= NOW())
-        OR ("status" = 'RUNNING' AND "leaseExpiresAt" < NOW())
+        ("status" = 'QUEUED' AND "availableAt" <= ${databaseUtcNow})
+        OR ("status" = 'RUNNING' AND "leaseExpiresAt" < ${databaseUtcNow})
       )
       ORDER BY "createdAt" ASC
       FOR UPDATE SKIP LOCKED
@@ -51,16 +58,33 @@ export async function claimNextProductFileJob(workerId: string, leaseMillisecond
     SET
       "status" = 'RUNNING',
       "leaseOwner" = ${workerId},
-      "leaseExpiresAt" = ${leaseExpiresAt},
-      "startedAt" = COALESCE(job."startedAt", NOW()),
+      "leaseExpiresAt" = ${databaseUtcNow} + (${leaseMilliseconds}::double precision * INTERVAL '1 millisecond'),
+      "startedAt" = COALESCE(job."startedAt", ${databaseUtcNow}),
       "attempts" = job."attempts" + 1,
       "error" = NULL,
-      "updatedAt" = NOW()
+      "updatedAt" = ${databaseUtcNow}
     FROM candidate
     WHERE job."id" = candidate."id"
     RETURNING job.*
   `;
   return jobs[0] ?? null;
+}
+
+export function renewProductFileJobLease(
+  jobId: string,
+  leaseOwner: string,
+  leaseMilliseconds = productFileJobLeaseMilliseconds,
+) {
+  return prisma.$executeRaw`
+    UPDATE "ProductFileJob"
+    SET
+      "leaseExpiresAt" = ${databaseUtcNow} + (${leaseMilliseconds}::double precision * INTERVAL '1 millisecond'),
+      "updatedAt" = ${databaseUtcNow}
+    WHERE
+      "id" = ${jobId}
+      AND "status" = 'RUNNING'
+      AND "leaseOwner" = ${leaseOwner}
+  `;
 }
 
 export function updateProductFileJob(jobId: string, data: { phase?: string; progress?: number | null }) {

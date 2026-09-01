@@ -50,5 +50,6 @@ COPY --from=builder /app ./
 EXPOSE 3000
 
 # Apply DB migrations at startup, including the guarded recovery for the known
-# duplicate-public-name migration failure, then launch Next.js.
+# duplicate-public-name migration failure, then launch the supervised web and
+# file-worker processes together in this container.
 CMD ["sh", "/app/scripts/production-migrate.sh"]

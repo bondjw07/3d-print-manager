@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ProductFileJob } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { publishProductPrintReadyFile } from "@/server/bambuddy/bambuddy-publish-service";
 import {
   generateProcessedThreeMf,
@@ -12,6 +13,8 @@ import {
   completeProductFileJob,
   enqueueProductFileJob,
   failProductFileJob,
+  productFileJobHeartbeatMilliseconds,
+  renewProductFileJobLease,
   updateProductFileJob,
 } from "./product-file-job-service";
 
@@ -40,6 +43,14 @@ function selectionsFrom(job: ProductFileJob) {
 }
 
 export async function processClaimedProductFileJob(job: ProductFileJob) {
+  const heartbeat = job.leaseOwner ? setInterval(() => {
+    void renewProductFileJobLease(job.id, job.leaseOwner!).then((updated) => {
+      if (!updated) console.error(`[PMP file worker] Lost lease for job ${job.id}.`);
+    }).catch((error) => {
+      console.error(`[PMP file worker] Unable to renew lease for job ${job.id}.`, error);
+    });
+  }, productFileJobHeartbeatMilliseconds) : null;
+  heartbeat?.unref();
   try {
     if (job.kind === "SOURCE_INSPECTION") {
       await updateProductFileJob(job.id, { phase: "Inspecting archive" });
@@ -88,12 +99,24 @@ export async function processClaimedProductFileJob(job: ProductFileJob) {
       // Keep the worker lane alive even when the cascaded job row is already gone.
       console.error(`Unable to persist failure for product file job ${job.id}.`, persistenceError);
     }
+  } finally {
+    if (heartbeat) clearInterval(heartbeat);
   }
 }
 
 export async function runOneProductFileJob(workerId = `pmp-${randomUUID()}`) {
   const job = await claimNextProductFileJob(workerId);
   if (!job) return false;
+  const startedAt = Date.now();
+  console.log(`[PMP file worker] Claimed ${job.kind} job ${job.id} for Product ${job.productId} (attempt ${job.attempts}).`);
   await processClaimedProductFileJob(job);
+  const finished = await prisma.productFileJob.findUnique({
+    where: { id: job.id },
+    select: { status: true, phase: true, error: true },
+  });
+  const durationSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  if (!finished) console.log(`[PMP file worker] Job ${job.id} was removed after ${durationSeconds}s.`);
+  else if (finished.status === "FAILED") console.error(`[PMP file worker] Job ${job.id} failed after ${durationSeconds}s: ${finished.error ?? "Unknown error"}`);
+  else console.log(`[PMP file worker] Job ${job.id} ${finished.status.toLowerCase()} after ${durationSeconds}s (${finished.phase ?? "no phase"}).`);
   return true;
 }

@@ -63,7 +63,7 @@ prepare_private_storage
 
 if npx prisma migrate deploy >"$MIGRATE_LOG" 2>&1; then
   cat "$MIGRATE_LOG"
-  exec npm run start
+  exec node /app/scripts/production.mjs
 fi
 
 cat "$MIGRATE_LOG" >&2
@@ -76,7 +76,7 @@ if grep -Fq "P3009" "$MIGRATE_LOG" && grep -Fq "$FAILED_MIGRATION" "$MIGRATE_LOG
   echo "Recovering known failed migration: $FAILED_MIGRATION" >&2
   npx prisma migrate resolve --rolled-back "$FAILED_MIGRATION"
   npx prisma migrate deploy
-  exec npm run start
+  exec node /app/scripts/production.mjs
 fi
 
 echo "Migration deployment failed; refusing automatic recovery for an unknown migration error." >&2

@@ -159,7 +159,9 @@ Source files are never overwritten. Each product has one current processed artif
 - Bulk `.gcode.3mf` uploads are matched by the exact processed-name relationship and reviewed before upload.
 - BamBuddy batch publishing includes a read-only PMP tag review and independent per-Product retries.
 
-In local development, `npm run dev` starts both Next.js and the file worker. The worker can also be run independently with `npm run worker:file-processing`. Set `PMP_FILE_WORKER_CONCURRENCY` to tune concurrent machine work for the host.
+In local development, `npm run dev` starts both Next.js and the file worker. In production, the app image supervises those same two processes inside the single PMP app container, so queued work does not require another Unraid container. `PMP_FILE_WORKER_CONCURRENCY` controls how many file jobs that embedded worker can run at once; production defaults to `1` to keep archive processing from overwhelming a small host.
+
+`npm run worker:file-processing` remains available for advanced deployments that deliberately move work to a separate process or host. Do not start an extra worker unless the additional concurrency is intentional.
 
 ## Architecture Notes
 
@@ -188,7 +190,7 @@ In local development, `npm run dev` starts both Next.js and the file worker. The
 
 This project is designed to run as a **single stack** with:
 
-- the Next.js app container
+- one PMP app container, which supervises both Next.js and the durable file worker
 - an internal PostgreSQL container
 
 No external MariaDB/Redis/cache service is required for this MVP.
@@ -246,7 +248,15 @@ From the folder that contains `docker-compose.unraid.yml` and `.env.production`:
 docker compose --env-file .env.production -f docker-compose.unraid.yml up -d
 ```
 
-The app starts on port `APP_PORT` (default `3000`).
+The app starts on port `APP_PORT` (default `3000`). The same container also starts
+the durable file worker automatically. Set `PMP_FILE_WORKER_CONCURRENCY` in
+`.env.production` to control parallel archive jobs; the recommended Unraid
+default is `1`.
+
+If either the web process or worker exits unexpectedly, their supervisor stops
+the other process so Docker can restart the complete PMP app container. Worker
+claim, completion, duration, and failure messages are written to the app
+container log.
 
 At startup, the package verifies that `/app/public/uploads` is a real writable mount and
 refuses to start instead of silently storing private artifacts in the

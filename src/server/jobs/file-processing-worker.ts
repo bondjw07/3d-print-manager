@@ -7,7 +7,7 @@ try { process.loadEnvFile?.(); } catch {}
 function configuredConcurrency() {
   const configured = Number(process.env.PMP_FILE_WORKER_CONCURRENCY);
   if (Number.isInteger(configured) && configured > 0 && configured <= 32) return configured;
-  return 2;
+  return 1;
 }
 
 function wait(milliseconds: number) {
