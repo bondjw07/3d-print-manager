@@ -11,6 +11,7 @@ import { getProcessingQueue, getProcessingQueueFacets } from "@/server/services/
 
 type QueueSearchParams = {
   q?: string;
+  creator?: string;
   category?: string;
   tag?: string;
   completion?: string;
@@ -25,6 +26,7 @@ export default async function ProcessingQueuePage({ searchParams }: { searchPara
   const source: "present" | "missing" | "all" = params.source === "present" || params.source === "missing" ? params.source : "all";
   const filters = {
     q: params.q?.trim() || undefined,
+    creator: params.creator?.trim() || undefined,
     category: params.category?.trim() || undefined,
     tag: params.tag?.trim() || undefined,
     completion,
@@ -37,6 +39,7 @@ export default async function ProcessingQueuePage({ searchParams }: { searchPara
     filters.completion !== "incomplete",
     filters.source !== "all",
     filters.state,
+    filters.creator,
     filters.category,
     filters.tag,
   ].filter(Boolean).length;
@@ -92,6 +95,11 @@ export default async function ProcessingQueuePage({ searchParams }: { searchPara
                 <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">Source files
                   <Select name="source" defaultValue={filters.source}>
                     <option value="all">All source states</option><option value="missing">Source missing</option><option value="present">Source present</option>
+                  </Select>
+                </label>
+                <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">Creator
+                  <Select name="creator" defaultValue={filters.creator ?? ""}>
+                    <option value="">All creators</option>{facets.creators.map((creator) => <option key={creator}>{creator}</option>)}
                   </Select>
                 </label>
                 <label className="grid gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">Category

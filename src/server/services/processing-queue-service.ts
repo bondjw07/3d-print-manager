@@ -6,6 +6,7 @@ export const processingQueuePageSize = 25;
 
 export type ProcessingQueueFilters = {
   q?: string;
+  creator?: string;
   category?: string;
   tag?: string;
   completion?: "incomplete" | "complete" | "all";
@@ -30,6 +31,7 @@ export async function getProcessingQueue(filters: ProcessingQueueFilters) {
         { internalName: { contains: filters.q.trim(), mode: "insensitive" } },
         { sku: { contains: filters.q.trim(), mode: "insensitive" } },
       ] } : {}),
+      ...(filters.creator?.trim() ? { importSourceCreatorName: filters.creator.trim() } : {}),
       ...(filters.category?.trim() ? { category: filters.category.trim() } : {}),
       ...(filters.tag?.trim() ? { tags: { has: filters.tag.trim() } } : {}),
       ...(completion === "incomplete" ? { bambuBuddyFileId: null } : completion === "complete" ? { bambuBuddyFileId: { not: null } } : {}),
@@ -130,8 +132,9 @@ export async function getProcessingQueue(filters: ProcessingQueueFilters) {
 }
 
 export async function getProcessingQueueFacets() {
-  const products = await prisma.product.findMany({ select: { category: true, tags: true } });
+  const products = await prisma.product.findMany({ select: { category: true, tags: true, importSourceCreatorName: true } });
   return {
+    creators: Array.from(new Set(products.map((product) => product.importSourceCreatorName).filter((creator): creator is string => Boolean(creator)))).sort((left, right) => left.localeCompare(right)),
     categories: Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort(),
     tags: Array.from(new Set(products.flatMap((product) => product.tags))).sort((left, right) => left.localeCompare(right)),
   };
