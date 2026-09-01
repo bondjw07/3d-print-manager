@@ -110,6 +110,27 @@ enum ApplicationFileKind {
   P2S_REFERENCE
 }
 
+enum ProductFileJobKind {
+  SOURCE_INSPECTION
+  MAPPING_INSPECTION
+  PROCESSED_GENERATION
+  BAMBUDDY_PUBLISH
+}
+
+enum ProductFileJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum SourceInspectionStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 enum MarketplaceEventType {
   SALE_OCCURRED
   LISTING_REMOVED
@@ -193,6 +214,8 @@ model Product {
   sourceMigrationRows  SourceMigrationRow[]
   sourceFiles          ProductSourceFile[]
   artifacts            ProductArtifact[]
+  fileJobs             ProductFileJob[]
+  mappingDraft         ProductMappingDraft?
   pricingTier          PricingTier? @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
 
   @@index([status, isPublic])
@@ -211,13 +234,66 @@ model ProductSourceFile {
   sizeBytes       BigInt
   sha256          String
   packageManifest Json?
+  inspectionStatus SourceInspectionStatus @default(PENDING)
+  threeMfCandidateCount Int?
+  inspectionError String?
+  inspectedAt     DateTime?
   createdAt       DateTime @default(now())
 
   product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   artifacts ProductArtifact[]
+  fileJobs  ProductFileJob[]
+  mappingDrafts ProductMappingDraft[]
 
   @@index([productId, createdAt])
+  @@index([productId, inspectionStatus])
   @@index([sha256])
+}
+
+model ProductMappingDraft {
+  id                 String   @id @default(cuid())
+  productId          String   @unique
+  sourceFileId       String
+  entryPath          String?
+  sourceSha256       String
+  referenceSha256    String
+  mappingFingerprint String
+  inspection         Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceFile ProductSourceFile @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@index([sourceFileId])
+}
+
+model ProductFileJob {
+  id             String               @id @default(cuid())
+  productId      String
+  sourceFileId   String?
+  kind           ProductFileJobKind
+  status         ProductFileJobStatus @default(QUEUED)
+  phase          String?
+  progress       Int?
+  payload        Json?
+  result         Json?
+  error          String?
+  attempts       Int                  @default(0)
+  availableAt    DateTime             @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  product    Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceFile ProductSourceFile? @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt, createdAt])
+  @@index([productId, createdAt])
+  @@index([sourceFileId])
 }
 
 model ProductArtifact {

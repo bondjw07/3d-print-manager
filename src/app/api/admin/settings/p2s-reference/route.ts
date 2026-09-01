@@ -65,6 +65,7 @@ export async function POST(request: Request) {
           extractedSettings: storedSettings,
         },
       });
+      await prisma.productMappingDraft.deleteMany();
       if (previous?.storageKey && previous.storageKey !== storageKey) {
         try { await privateFileStorage.delete(previous.storageKey); } catch (error) { console.error("Unable to remove replaced P2S reference", error); }
       }

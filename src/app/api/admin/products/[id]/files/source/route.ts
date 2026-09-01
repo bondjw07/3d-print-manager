@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
 import { normalizeUploadedFileName } from "@/server/files/file-name";
-import { inspectSourcePackage } from "@/server/files/zip-package-service";
 import {
   privateFileStorage,
   productSourceStorageKey,
-  resolvePrivateStoragePath,
 } from "@/server/storage/private-file-storage";
 import { getSettings } from "@/server/services/settings-service";
 
@@ -19,8 +17,10 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
   if (!user || user.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: productId } = await context.params;
-  const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+  const queueUpload = new URL(request.url).searchParams.get("queue") === "true";
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, _count: { select: { sourceFiles: true } } } });
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  if (queueUpload && product._count.sourceFiles > 0) return NextResponse.json({ error: "This Product already has source files. Use its Files screen to manage or replace them." }, { status: 409 });
   if (!request.body) return NextResponse.json({ error: "File body is required" }, { status: 400 });
 
   let originalName: string;
@@ -40,31 +40,30 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
   const storageKey = productSourceStorageKey(productId, sourceFileId, originalName);
   try {
     const stored = await privateFileStorage.saveWebStream(storageKey, request.body, settings.fileUploadMaxBytes);
-    let packageManifest;
     try {
-      packageManifest = await inspectSourcePackage(resolvePrivateStoragePath(storageKey), originalName, {
-        expandedMaxBytes: settings.zipExpandedMaxBytes,
-        maxEntries: settings.zipMaxEntries,
-        maxCompressionRatio: settings.zipMaxCompressionRatio,
-      });
-    } catch (error) {
-      await privateFileStorage.delete(storageKey);
-      throw error;
-    }
-
-    try {
-      const sourceFile = await prisma.productSourceFile.create({
-        data: {
-          id: sourceFileId,
-          productId,
-          originalName,
-          storageKey,
-          mediaType: request.headers.get("content-type")?.slice(0, 255) || null,
-          sizeBytes: stored.sizeBytes,
-          sha256: stored.sha256,
-          packageManifest,
-        },
-      });
+      const [sourceFile, job] = await prisma.$transaction([
+        prisma.productSourceFile.create({
+          data: {
+            id: sourceFileId,
+            productId,
+            originalName,
+            storageKey,
+            mediaType: request.headers.get("content-type")?.slice(0, 255) || null,
+            sizeBytes: stored.sizeBytes,
+            sha256: stored.sha256,
+            inspectionStatus: "PENDING",
+          },
+        }),
+        prisma.productFileJob.create({
+          data: {
+            productId,
+            sourceFileId,
+            kind: "SOURCE_INSPECTION",
+            phase: "Queued for archive inspection",
+            payload: { sourceFileId },
+          },
+        }),
+      ]);
       revalidatePath(`/admin/products/${productId}`);
       revalidatePath(`/admin/products/${productId}/files`);
       return NextResponse.json({
@@ -72,6 +71,7 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
           ...sourceFile,
           sizeBytes: sourceFile.sizeBytes.toString(),
         },
+        jobId: job.id,
       });
     } catch (error) {
       await privateFileStorage.delete(storageKey);

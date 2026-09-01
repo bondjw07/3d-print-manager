@@ -67,7 +67,7 @@ async function syncTags(client: BambuBuddyClient, fileId: number, productTags: s
   if (result.files_updated !== 1) throw new Error("BamBuddy did not update tags for the published file.");
 }
 
-export async function publishProductPrintReadyFile(productId: string) {
+export async function publishProductPrintReadyFile(productId: string, reportPhase?: (phase: string) => void | Promise<void>) {
   const [product, artifact, processed, settings, apiKey, categoryTagMappings] = await Promise.all([
     prisma.product.findUnique({ where: { id: productId } }),
     prisma.productArtifact.findUnique({ where: { productId_kind: { productId, kind: "PRINT_READY" } } }),
@@ -88,13 +88,14 @@ export async function publishProductPrintReadyFile(productId: string) {
   await prisma.productArtifact.update({ where: { id: artifact.id }, data: { lastPublishAttemptAt: new Date(), lastPublishError: null } });
   const client = new BambuBuddyClient(settings.bambuBuddyBaseUrl, apiKey);
   try {
+    await reportPhase?.("Checking for an existing BamBuddy file");
     const linkedFile = await existingLinkedFile(client, product.bambuBuddyFileId);
     const linkedFileIsCurrent = Boolean(
       linkedFile && artifact.publishedSha256 === artifact.sha256 && linkedFile.id === Number(product.bambuBuddyFileId),
     );
     const folderId = linkedFileIsCurrent && linkedFile && linkedFile.folder_id !== null
       ? linkedFile.folder_id
-      : await resolveBambuBuddyFolderHierarchy(client, [creator, product.publicName]);
+      : (await reportPhase?.("Resolving BamBuddy folders"), await resolveBambuBuddyFolderHierarchy(client, [creator, product.publicName]));
     let fileName = artifact.bambuBuddyFileName ?? (linkedFileIsCurrent ? linkedFile?.filename ?? null : null);
     let fileId: number;
 
@@ -114,18 +115,22 @@ export async function publishProductPrintReadyFile(productId: string) {
       if (existing && existing.file_size !== Number(artifact.sizeBytes)) {
         throw new Error(`BamBuddy already contains ${fileName} with a different size. Resolve that collision before retrying.`);
       }
+      if (!existing) await reportPhase?.("Uploading print-ready file to BamBuddy");
       fileId = existing?.id ?? (await client.uploadFile(folderId, resolvePrivateStoragePath(artifact.storageKey), fileName)).id;
     }
 
+    await reportPhase?.("Saving BamBuddy File ID");
     await prisma.$transaction([
       prisma.product.update({ where: { id: productId }, data: { bambuBuddyFileId: String(fileId) } }),
       prisma.productArtifact.update({ where: { id: artifact.id }, data: { publishedSha256: artifact.sha256, lastPublishError: null } }),
     ]);
 
     const categoryTag = getBambuBuddyTagForProductCategory(product.category, categoryTagMappings);
+    await reportPhase?.("Synchronizing BamBuddy tags");
     await syncTags(client, fileId, categoryTag ? [...product.tags, categoryTag] : product.tags);
     await prisma.productArtifact.update({ where: { id: artifact.id }, data: { bambuBuddyTagsSyncedAt: new Date(), lastPublishError: null } });
 
+    await reportPhase?.("Refreshing print metadata");
     const remoteFile = await client.getFile(fileId);
     await updateBambuBuddyProductData({
       productId,

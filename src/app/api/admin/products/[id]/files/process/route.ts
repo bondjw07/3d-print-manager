@@ -1,15 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/server/auth/mock-auth-provider";
-import { normalizeUploadedFileName } from "@/server/files/file-name";
-import { transformThreeMf } from "@/server/files/three-mf-processor";
-import { withMaterializedSourceCandidate } from "@/server/files/source-candidate-service";
-import { getSettings } from "@/server/services/settings-service";
-import { privateFileStorage, productArtifactStorageKey } from "@/server/storage/private-file-storage";
+import { enqueueProductFileJob } from "@/server/jobs/product-file-job-service";
 
 export const runtime = "nodejs";
 
@@ -25,78 +17,19 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/p
     ? Object.fromEntries(Object.entries(payload.selections).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
     : null;
   if (!sourceFileId || !selections) return NextResponse.json({ error: "Source file and reviewed mappings are required." }, { status: 400 });
-
-  const [product, sourceFile, reference, mappings, settings] = await Promise.all([
-    prisma.product.findUnique({ where: { id: productId }, select: { id: true, publicName: true } }),
-    prisma.productSourceFile.findFirst({ where: { id: sourceFileId, productId } }),
-    prisma.applicationFile.findUnique({ where: { kind: "P2S_REFERENCE" } }),
-    prisma.bambuBuddyFilamentMapping.findMany(),
-    getSettings(),
-  ]);
-  if (!product || !sourceFile) return NextResponse.json({ error: "Product source file not found." }, { status: 404 });
-  if (!reference?.extractedSettings || typeof reference.extractedSettings !== "object" || Array.isArray(reference.extractedSettings)) {
-    return NextResponse.json({ error: "Configure a valid P2S reference before processing." }, { status: 400 });
-  }
+  const sourceFile = await prisma.productSourceFile.findFirst({ where: { id: sourceFileId, productId } });
+  if (!sourceFile) return NextResponse.json({ error: "Product source file not found." }, { status: 404 });
 
   try {
-    const result = await withMaterializedSourceCandidate({
-      sourceFile,
-      entryPath,
-      maxBytes: settings.fileUploadMaxBytes,
-      run: async (inputPath) => {
-        const tempDirectory = await mkdtemp(path.join(os.tmpdir(), "pmp-output-"));
-        const outputPath = path.join(tempDirectory, "processed.3mf");
-        try {
-          const summary = await transformThreeMf(inputPath, outputPath, {
-            mappings,
-            selections,
-            referenceSettings: reference.extractedSettings as Record<string, unknown>,
-          });
-          const downloadName = normalizeUploadedFileName(`${product.publicName}-P2S-processed.3mf`);
-          const storageKey = productArtifactStorageKey(product.id, "processed", downloadName);
-          const stored = await privateFileStorage.saveFile(storageKey, outputPath, settings.fileUploadMaxBytes);
-          const previous = await prisma.productArtifact.findUnique({ where: { productId_kind: { productId, kind: "PROCESSED_3MF" } } });
-          try {
-            const artifact = await prisma.productArtifact.upsert({
-              where: { productId_kind: { productId, kind: "PROCESSED_3MF" } },
-              create: {
-                productId,
-                kind: "PROCESSED_3MF",
-                storageKey,
-                downloadName,
-                mediaType: "model/3mf",
-                sizeBytes: stored.sizeBytes,
-                sha256: stored.sha256,
-                sourceFileId,
-                sourceArchiveEntryPath: entryPath,
-              },
-              update: {
-                storageKey,
-                downloadName,
-                mediaType: "model/3mf",
-                sizeBytes: stored.sizeBytes,
-                sha256: stored.sha256,
-                sourceFileId,
-                sourceArchiveEntryPath: entryPath,
-              },
-            });
-            if (previous?.storageKey && previous.storageKey !== storageKey) {
-              try { await privateFileStorage.delete(previous.storageKey); } catch (error) { console.error("Unable to remove replaced processed 3MF", error); }
-            }
-            return { artifact, summary };
-          } catch (error) {
-            await privateFileStorage.delete(storageKey);
-            throw error;
-          }
-        } finally {
-          await rm(tempDirectory, { recursive: true, force: true });
-        }
-      },
+    const job = await enqueueProductFileJob({
+      productId,
+      sourceFileId,
+      kind: "PROCESSED_GENERATION",
+      phase: "Queued for processed 3MF generation",
+      payload: { sourceFileId, entryPath, selections },
     });
-    revalidatePath(`/admin/products/${productId}`);
-    revalidatePath(`/admin/products/${productId}/files`);
-    return NextResponse.json({ artifactId: result.artifact.id, sha256: result.artifact.sha256, summary: result.summary });
+    return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to generate processed 3MF." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to queue processed 3MF generation." }, { status: 400 });
   }
 }

@@ -123,6 +123,7 @@ Admin:
 - `/admin/inventory`
 - `/admin/settings`
 - `/admin/products/[id]/files`
+- `/admin/products/processing`
 
 On `/admin/products`, use **Imports** for:
 
@@ -147,6 +148,18 @@ than one version is published on the same date, PMP adds `_2`, `_3`, and so on;
 the chosen filename is retained for safe publish retries.
 
 Source files are never overwritten. Each product has one current processed artifact and one current print-ready artifact. Replacing the global P2S reference automatically changes the profiles available to subsequent processing runs.
+
+### Processing Queue
+
+`/admin/products/processing` provides the batch file-processing workbench. It derives each Product's numbered state from its source files, current artifacts, and BamBuddy publication metadata while persisting only active/failed machine jobs and reusable mapping-inspection drafts.
+
+- Source archives can be staged against individual visible Product rows and uploaded together with byte-level progress.
+- Archive inspection, mapping inspection, processed 3MF generation, and BamBuddy publication run through durable PostgreSQL jobs.
+- Processed files can be streamed together as a ZIP without modifying their contents.
+- Bulk `.gcode.3mf` uploads are matched by the exact processed-name relationship and reviewed before upload.
+- BamBuddy batch publishing includes a read-only PMP tag review and independent per-Product retries.
+
+In local development, `npm run dev` starts both Next.js and the file worker. The worker can also be run independently with `npm run worker:file-processing`. Set `PMP_FILE_WORKER_CONCURRENCY` to tune concurrent machine work for the host.
 
 ## Architecture Notes
 

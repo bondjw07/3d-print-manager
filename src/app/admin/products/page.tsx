@@ -157,6 +157,7 @@ export default async function AdminProductsPage({
             <Link href="/admin/products" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "catalog" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Product catalog</Link>
             <Link href="/admin/products?view=bulk" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "bulk" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Bulk update</Link>
             <Link href="/admin/products?view=imports" className={`rounded-t-xl px-4 py-2 text-sm font-medium ${view === "imports" ? "bg-sky-500 text-slate-950" : "text-slate-600 hover:bg-slate-100"}`}>Imports</Link>
+            <Link href="/admin/products/processing" className="rounded-t-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Processing Queue</Link>
           </div>
 
           {view === "imports" ? <ProductImportsDropdown /> : <>

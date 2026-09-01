@@ -16,6 +16,8 @@ type SourceFile = {
   sha256: string;
   createdAt: string;
   packageManifest: Manifest | null;
+  inspectionStatus: "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED";
+  inspectionError: string | null;
 };
 
 function formatBytes(value: string) {
@@ -112,7 +114,7 @@ export function ProductSourceFiles({ productId, sourceFiles }: { productId: stri
               }}>Delete</Button>
             </div>
           </div>
-          {candidates.length === 0 ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">No 3MF file was found in this source.</p> : <div className="mt-3 space-y-2">
+          {sourceFile.inspectionStatus === "PENDING" || sourceFile.inspectionStatus === "PROCESSING" ? <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">Archive uploaded · {sourceFile.inspectionStatus === "PENDING" ? "Queued for inspection" : "Identifying 3MF"}</p> : sourceFile.inspectionStatus === "FAILED" ? <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">Source processing failed: {sourceFile.inspectionError ?? "Unable to inspect this source."}</p> : candidates.length === 0 ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">No 3MF file was found in this source.</p> : <div className="mt-3 space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">3MF candidates</p>
             {candidates.map((candidate) => {
               const query = new URLSearchParams({ sourceFileId: sourceFile.id, ...(candidate.entryPath ? { entryPath: candidate.entryPath } : {}) });

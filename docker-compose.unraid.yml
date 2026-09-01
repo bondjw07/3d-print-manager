@@ -23,6 +23,24 @@ services:
       timeout: 5s
       retries: 5
 
+  file-worker:
+    image: ${APP_IMAGE:-ghcr.io/REPLACE_WITH_YOUR_GITHUB_OWNER/REPLACE_WITH_YOUR_REPO:main}
+    container_name: print-portal-file-worker
+    restart: unless-stopped
+    pull_policy: always
+    command: ["npm", "run", "worker:file-processing"]
+    env_file:
+      - .env.production
+    environment:
+      PMP_FILE_STORAGE_ROOT: /app/public/uploads/pmp-files
+      PMP_FILE_WORKER_CONCURRENCY: ${PMP_FILE_WORKER_CONCURRENCY:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${UPLOADS_HOST_PATH:-/mnt/user/appdata/print-portal/uploads}:/app/uploads
+      - ${UPLOADS_HOST_PATH:-/mnt/user/appdata/print-portal/uploads}:/app/public/uploads
+
   postgres:
     image: postgres:16-alpine
     container_name: print-portal-postgres

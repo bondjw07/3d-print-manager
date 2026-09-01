@@ -18,7 +18,7 @@ export function BambuBuddyPublishButton({ productId, publishedIsCurrent, blocked
           const response = await fetch(`/api/admin/products/${productId}/files/publish`, { method: "POST" });
           const payload = await readApiResponse(response);
           if (!response.ok) throw new Error(payload.error ?? "Publish failed.");
-          setSuccess(publishedIsCurrent ? "BamBuddy tags and metadata re-synced." : `Published to BamBuddy as File ID ${payload.fileId}.`);
+          setSuccess(publishedIsCurrent ? "BamBuddy re-sync queued." : "BamBuddy publish queued. Progress is available in Processing Queue.");
           router.refresh();
         } catch (publishError) {
           setError(publishError instanceof Error ? publishError.message : "Publish failed.");

@@ -54,6 +54,8 @@ export default async function ProductFilesPage({ params, searchParams }: { param
             sha256: sourceFile.sha256,
             createdAt: sourceFile.createdAt.toISOString(),
             packageManifest: sourceFile.packageManifest as never,
+            inspectionStatus: sourceFile.inspectionStatus,
+            inspectionError: sourceFile.inspectionError,
           }))}
         />
       </CardContent>

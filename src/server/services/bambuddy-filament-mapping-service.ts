@@ -22,9 +22,13 @@ export async function upsertBambuBuddyFilamentMapping(input: {
   const colorName = input.colorName.trim();
   if (!materialType || !colorName) throw new Error("Material type and display name are required.");
   const optional = (value?: string) => value?.trim() || null;
-  return prisma.bambuBuddyFilamentMapping.upsert({
-    where: { materialType_hexColor: { materialType, hexColor } },
-    create: { materialType, hexColor, colorName, manufacturer: optional(input.manufacturer), materialName: optional(input.materialName), effectType: optional(input.effectType) },
-    update: { colorName, manufacturer: optional(input.manufacturer), materialName: optional(input.materialName), effectType: optional(input.effectType) },
+  return prisma.$transaction(async (transaction) => {
+    const mapping = await transaction.bambuBuddyFilamentMapping.upsert({
+      where: { materialType_hexColor: { materialType, hexColor } },
+      create: { materialType, hexColor, colorName, manufacturer: optional(input.manufacturer), materialName: optional(input.materialName), effectType: optional(input.effectType) },
+      update: { colorName, manufacturer: optional(input.manufacturer), materialName: optional(input.materialName), effectType: optional(input.effectType) },
+    });
+    await transaction.productMappingDraft.deleteMany();
+    return mapping;
   });
 }
