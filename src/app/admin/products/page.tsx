@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { SelectAllFormCheckbox } from "@/components/ui/select-all-form-checkbox";
 import { Table, TableContainer } from "@/components/ui/table";
+import { DismissibleDetails } from "@/components/ui/dismissible-details";
 import { ProductImportsDropdown } from "@/components/forms/product-imports-dropdown";
 import { BulkPricingTierSelector } from "@/components/admin/bulk-pricing-tier-selector";
 import { HoverInfo } from "@/components/ui/hover-info";
@@ -164,7 +165,7 @@ export default async function AdminProductsPage({
             {sort ? <><input type="hidden" name="sort" value={sort} /><input type="hidden" name="direction" value={direction} /></> : null}
             <div className="flex flex-wrap gap-2">
               <Input name="q" defaultValue={q} placeholder="Search by internal name, public name, or SKU" className="min-w-64 flex-1" />
-              <details open={activeFilterCount > 0} className="group relative">
+              <DismissibleDetails defaultOpen={activeFilterCount > 0} className="group relative">
                 <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
                   <SlidersHorizontal className="h-4 w-4" aria-hidden />
                   Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
@@ -221,7 +222,7 @@ export default async function AdminProductsPage({
                     <Button type="submit" size="sm">Apply filters</Button>
                   </div>
                 </div>
-              </details>
+              </DismissibleDetails>
               <Button type="submit" variant="secondary">Search</Button>
             </div>
           </form>
